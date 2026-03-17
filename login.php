@@ -110,16 +110,24 @@ background-color: #0056b3;
 
 <h2 class="text-center fw-bold mb-4" style="color: var(--ccs-purple);">Log in</h2>
 
+<?php if ($error): ?>
+<div class="alert alert-danger">
+<?php echo $error == 'invalid' ? 'Invalid ID number or password.' : ''; ?>
+</div>
+<?php endif; ?>
+
 <form action="userprofile.php" method="POST">
+
 <div class="mb-3">
-<label class="form-label">Email Address</label>
-<input type="email" class="form-control" name="email" placeholder="example@email.com" required>
+<label>ID Number</label>
+<input type="text" name="id_number" class="form-control" required>
 </div>
 
 <div class="mb-3">
-<label class="form-label">Password</label>
-<input type="password" class="form-control" name="password" minlength="6" required>
+<label>Password</label>
+<input type="password" name="password" class="form-control" required>
 </div>
+
 
 <button type="submit" class="btn-login">Sign in</button>
 </form>
