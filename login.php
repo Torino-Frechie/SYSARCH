@@ -112,8 +112,8 @@ background-color: #0056b3;
 
 <form action="userprofile.php" method="POST">
 <div class="mb-3">
-<label class="form-label">Email Address</label>
-<input type="email" class="form-control" name="email" placeholder="example@email.com" required>
+<label>ID Number</label>
+<input type="text" name="id_number" class="form-control" required>
 </div>
 
 <div class="mb-3">
