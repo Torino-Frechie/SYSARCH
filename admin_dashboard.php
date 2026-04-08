@@ -12,6 +12,41 @@ if ($conn->connect_error) {
 
 // ── Handle POST actions ──────────────────────────────────────────────
 
+  $date = $_POST['reservation_date'];
+
+    $stmt = $conn->prepare("UPDATE reservations 
+        SET purpose=?, lab=?, preferred_time=?, reservation_date=? 
+        WHERE id=?");
+    $stmt->bind_param("ssssi", $purpose, $lab, $time, $date, $id);
+    $stmt->execute();
+
+    header("Location: admin_dashboard.php?tab=reservation");
+    exit();
+
+
+// DELETE reservation
+if (isset($_POST['delete_reservation'])) {
+    $id = $_POST['id'];
+
+    $stmt = $conn->prepare("DELETE FROM reservations WHERE id=?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+
+    header("Location: admin_dashboard.php?tab=reservation");
+    exit();
+}
+
+// Approve / Reject reservation
+if (isset($_POST['update_reservation'])) {
+    $res_id = intval($_POST['res_id']);
+    $status = $conn->real_escape_string($_POST['status']);
+
+    $conn->query("UPDATE reservations SET status = '$status' WHERE id = $res_id");
+
+    header("Location: admin_dashboard.php?tab=reservation");
+    exit();
+}
+
 // Post announcement
 if (isset($_POST['post_announcement'])) {
     $msg = $conn->real_escape_string(trim($_POST['announcement']));
@@ -170,7 +205,6 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
             --uc-blue: #a1cbf7;
             --ccs-purple: #9757d6;
             --ccs-gold: #FFD700;
-            --sidebar-width: 230px;
         }
 
         * { box-sizing: border-box; }
@@ -182,93 +216,97 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
             overflow-x: hidden;
         }
 
-        /* ── Sidebar ── */
-        .sidebar {
-            width: var(--sidebar-width);
-            min-height: 100vh;
-            background: linear-gradient(160deg, var(--ccs-purple) 0%, #6a3fa0 50%, #2e6da4 100%);
-            position: fixed;
-            top: 0; left: 0;
-            display: flex;
-            flex-direction: column;
-            z-index: 200;
-            box-shadow: 4px 0 20px rgba(151,87,214,0.25);
-        }
-        .sidebar-logo {
-            padding: 24px 18px 18px;
-            border-bottom: 1px solid rgba(255,255,255,0.12);
-            text-align: center;
-        }
-        .sidebar-logo .logo-title {
-            color: white;
-            font-size: 0.82rem;
-            font-weight: 700;
-            margin-top: 10px;
-            letter-spacing: 0.3px;
-            line-height: 1.4;
-        }
-        .sidebar-logo .logo-sub {
-            color: rgba(255,255,255,0.6);
-            font-size: 0.68rem;
-            font-weight: 300;
-            margin-top: 2px;
-        }
-        .sidebar-nav { padding: 10px 0; flex: 1; overflow-y: auto; }
-        .nav-section-label {
-            font-size: 0.6rem;
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-            color: rgba(255,255,255,0.35);
-            padding: 14px 18px 4px;
-        }
-        .sidebar-link {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 9px 18px;
-            color: rgba(255,255,255,0.72);
-            text-decoration: none;
-            font-size: 0.85rem;
-            border-left: 3px solid transparent;
-            transition: all 0.2s;
-        }
-        .sidebar-link:hover {
-            background: rgba(255,255,255,0.1);
-            color: white;
-        }
-        .sidebar-link.active {
-            background: rgba(255,255,255,0.15);
-            border-left-color: var(--ccs-gold);
-            color: white;
-            font-weight: 600;
-        }
-        .sidebar-link i { width: 18px; text-align: center; font-size: 0.88rem; }
-        .sidebar-footer {
-            padding: 14px 18px;
-            border-top: 1px solid rgba(255,255,255,0.12);
-        }
-        .btn-logout-side {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            width: 100%;
-            padding: 8px 14px;
-            background: rgba(255,215,0,0.15);
-            border: 1px solid rgba(255,215,0,0.35);
-            border-radius: 8px;
-            color: var(--ccs-gold);
-            font-family: 'Poppins', sans-serif;
-            font-size: 0.83rem;
-            font-weight: 600;
-            cursor: pointer;
-            text-decoration: none;
-            transition: all 0.2s;
-        }
-        .btn-logout-side:hover {
-            background: var(--ccs-gold);
-            color: #333;
-        }
+        /* ─── TOP NAVBAR (MATCH SIDEBAR STYLE) ─── */
+.top-navbar {
+    position: fixed;
+    top: 0;
+    left: 0;           /* Ensures it starts at the very left */
+    width: 100%;       /* Spans the full width of the screen */
+    height: 60px;
+    z-index: 1000;     /* Keeps it above other elements */
 
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    /* Reduced padding to ensure links don't wrap and colors align */
+    padding: 0 20px; 
+
+    background: linear-gradient(160deg, var(--ccs-purple) 0%, #6a3fa0 50%, #2e6da4 100%);
+    box-shadow: 0 4px 20px rgba(151,87,214,0.25);
+}
+/* LEFT TITLE */
+.nav-left .brand-title {
+    color: white;
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+
+/* NAV LINKS */
+.nav-links {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.nav-links a {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    color: rgba(255,255,255,0.75);
+    text-decoration: none;
+
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 0.78rem;
+
+    transition: all 0.2s ease;
+}
+
+/* HOVER (same feel as sidebar) */
+.nav-links a:hover {
+    background: rgba(255,255,255,0.12);
+    color: white;
+}
+
+/* ACTIVE TAB */
+.nav-links a.active {
+    background: rgba(255,255,255,0.18);
+    color: white;
+    font-weight: 600;
+}
+
+/* LOGOUT BUTTON */
+.btn-logout-top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    background: rgba(255,215,0,0.15);
+    border: 1px solid rgba(255,215,0,0.35);
+    color: var(--ccs-gold);
+
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none;
+
+    transition: all 0.2s;
+}
+
+.btn-logout-top:hover {
+    background: var(--ccs-gold);
+    color: #333;
+}
+
+/* ─── FIX CONTENT POSITION ─── */
+.main-content {
+    margin-left: var(--sidebar-width);
+    margin-top: 60px; /* space for navbar */
+    padding: 0;
+}
         /* ── Main content ── */
         .main-content {
             margin-left: var(--sidebar-width);
@@ -381,7 +419,6 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
         .table tbody td {
             font-size: 0.83rem;
             vertical-align: middle;
-            padding: 9px 12px;
             color: #333;
         }
         .table tbody tr:hover { background: #f8f1fe; }
@@ -557,53 +594,54 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
 </head>
 <body>
 
-<!-- ════ SIDEBAR ════ -->
-<div class="sidebar">
-    <div class="sidebar-logo">
-        <div class="logo-title">College of Computer Studies</div>
-        <div class="logo-sub">Admin · Sit-in Monitoring</div>
+<!-- ════ TOP NAVBAR ════ -->
+<nav class="top-navbar">
+
+    <div class="nav-left">
+        <span class="brand-title">
+            <i class="bi bi-cpu-fill me-1"></i> CCS Sit-in Monitoring
+        </span>
     </div>
 
-    <nav class="sidebar-nav">
-        <div class="nav-section-label">Main</div>
-        <a href="admin_dashboard.php?tab=dashboard" class="sidebar-link <?= $active_tab==='dashboard' ? 'active':'' ?>">
-            <i class="bi bi-speedometer2"></i> Dashboard
-        </a>
-        <a href="admin_dashboard.php?tab=students" class="sidebar-link <?= $active_tab==='students' ? 'active':'' ?>">
+    <div class="nav-links">
+        <a href="admin_dashboard.php?tab=students" class="<?= $active_tab==='students'?'active':'' ?>">
             <i class="bi bi-people-fill"></i> Students
         </a>
-        <a href="admin_dashboard.php?tab=sitinform" class="sidebar-link <?= $active_tab==='sitinform' ? 'active':'' ?>">
+
+        <a href="admin_dashboard.php?tab=sitinform" class="<?= $active_tab==='sitinform'?'active':'' ?>">
             <i class="bi bi-box-arrow-in-right"></i> Sit-in
         </a>
-        <a href="admin_dashboard.php?tab=sitin" class="sidebar-link <?= $active_tab==='sitin' ? 'active':'' ?>">
-            <i class="bi bi-display"></i> Current Sit-in
-        </a>
-        <a href="admin_dashboard.php?tab=records" class="sidebar-link <?= $active_tab==='records' ? 'active':'' ?>">
-            <i class="bi bi-table"></i> Sit-in Records
+
+        <a href="admin_dashboard.php?tab=sitin" class="<?= $active_tab==='sitin'?'active':'' ?>">
+            <i class="bi bi-display"></i> Current
         </a>
 
-        <div class="nav-section-label">Manage</div>
-        <a href="admin_dashboard.php?tab=announcements" class="sidebar-link <?= $active_tab==='announcements' ? 'active':'' ?>">
+        <a href="admin_dashboard.php?tab=records" class="<?= $active_tab==='records'?'active':'' ?>">
+            <i class="bi bi-table"></i> Records
+        </a>
+
+        <a href="admin_dashboard.php?tab=announcements" class="<?= $active_tab==='announcements'?'active':'' ?>">
             <i class="bi bi-megaphone-fill"></i> Announcements
         </a>
-        <a href="admin_dashboard.php?tab=reports" class="sidebar-link <?= $active_tab==='reports' ? 'active':'' ?>">
-            <i class="bi bi-bar-chart-fill"></i> Sit-in Reports
+
+        <a href="admin_dashboard.php?tab=reports" class="<?= $active_tab==='reports'?'active':'' ?>">
+            <i class="bi bi-bar-chart-fill"></i> Reports
         </a>
-        <a href="admin_dashboard.php?tab=feedback" class="sidebar-link <?= $active_tab==='feedback' ? 'active':'' ?>">
-            <i class="bi bi-chat-left-text-fill"></i> Feedback Reports
+
+        <a href="admin_dashboard.php?tab=feedback" class="<?= $active_tab==='feedback'?'active':'' ?>">
+            <i class="bi bi-chat-left-text-fill"></i> Feedback
         </a>
-        <a href="admin_dashboard.php?tab=reservation" class="sidebar-link <?= $active_tab==='reservation' ? 'active':'' ?>">
+
+        <a href="admin_dashboard.php?tab=reservation" class="<?= $active_tab==='reservation'?'active':'' ?>">
             <i class="bi bi-calendar-check-fill"></i> Reservation
         </a>
-    </nav>
-
-    <div class="sidebar-footer">
-        <a href="landingpage.php" class="btn-logout-side">
-            <i class="bi bi-box-arrow-right"></i> Log Out
-        </a>
     </div>
-</div>
 
+  <a href="#" class="btn-logout-top" onclick="confirmLogout(event)">
+    <i class="bi bi-box-arrow-right"></i> Logout
+</a>
+
+</nav>
 <!-- ════ MAIN CONTENT ════ -->
 <div class="main-content">
 
@@ -733,6 +771,18 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
             plugins: { legend: { position: 'bottom', labels: { font:{ family:'Poppins', size:11 }, boxWidth:14 } } }
         }
     });
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('action') === 'logout') {
+        Swal.fire({
+            title: 'Success!',
+            text: 'Logout successfully',
+            icon: 'success',
+            confirmButtonColor: '#9757d6', // Matches your CCS Purple
+            timer: 3000
+        });
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
     </script>
 
 
@@ -807,11 +857,36 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
         </div>
     </div>
 
-    <!-- Hidden delete form -->
-    <form method="POST" id="deleteStudentForm">
-        <input type="hidden" name="del_idnumber" id="del_idnumber">
-        <input type="hidden" name="delete_student" value="1">
-    </form>
+            <!-- Hidden delete form -->
+            <form method="POST" id="deleteStudentForm">
+                <input type="hidden" name="del_idnumber" id="del_idnumber">
+                <input type="hidden" name="delete_student" value="1">
+            </form>
+
+            <div class="modal fade" id="editModal<?= $r['id'] ?>" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+            <form method="POST">
+                <div class="modal-header">
+                <h5>Edit Reservation</h5>
+                </div>
+
+                <div class="modal-body">
+                <input type="hidden" name="id" value="<?= $r['id'] ?>">
+
+                <input type="text" name="purpose" value="<?= $r['purpose'] ?>" class="form-control mb-2" required>
+                <input type="text" name="lab" value="<?= $r['lab'] ?>" class="form-control mb-2" required>
+                <input type="text" name="preferred_time" value="<?= $r['preferred_time'] ?>" class="form-control mb-2" required>
+                <input type="date" name="reservation_date" value="<?= $r['reservation_date'] ?>" class="form-control mb-2" required>
+                </div>
+
+                <div class="modal-footer">
+                <button name="edit_reservation" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+            </div>
+        </div>
+        </div>
 
     <!-- ── Add Student Modal ── -->
     <div class="modal fade" id="addStudentModal" tabindex="-1" aria-hidden="true">
@@ -1105,6 +1180,84 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
         </div>
     </div>
 
+        <!-- ══════════════ Reservations TAB ══════════════ -->
+
+    <?php elseif ($active_tab === 'reservation'): ?>
+
+<div class="dash-card">
+    <div class="card-header-purple">
+        <span>Student Reservations</span>
+    </div>
+
+    <div class="card-body">
+        <table class="table table-bordered">
+            <tr>
+                <th>ID</th>
+                <th>Student ID</th>
+                <th>Purpose</th>
+                <th>Lab</th>
+                <th>Time</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+
+            <?php
+            $res = $conn->query("SELECT * FROM reservations");
+
+            while ($r = $res->fetch_assoc()):
+            ?>
+
+            <tr>
+                <td><?= $r['id'] ?></td>
+                <td><?= $r['id_number'] ?></td>
+                <td><?= $r['purpose'] ?></td>
+                <td><?= $r['lab'] ?></td>
+                <td><?= $r['preferred_time'] ?></td>
+                <td><?= $r['reservation_date'] ?></td>
+                <td><?= $r['status'] ?></td>
+
+                <td>
+                    <?php if ($r['status'] === 'pending'): ?>
+
+                    <form method="POST" style="display:inline;">
+                        <input type="hidden" name="res_id" value="<?= $r['id'] ?>">
+                        <input type="hidden" name="status" value="approved">
+                        <button name="update_reservation">Approve</button>
+                    </form>
+
+                    <form method="POST" style="display:inline;">
+                        <input type="hidden" name="res_id" value="<?= $r['id'] ?>">
+                        <input type="hidden" name="status" value="rejected">
+                        <button name="update_reservation">Reject</button>
+                    </form>
+
+                    <?php endif; ?>
+                </td>
+            </tr>
+            
+            <td>
+    <!-- EDIT -->
+    <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#editModal<?= $r['id'] ?>">
+        Edit
+    </button>
+
+    <!-- DELETE -->
+    <form method="POST" style="display:inline;">
+        <input type="hidden" name="id" value="<?= $r['id'] ?>">
+        <button name="delete_reservation" class="btn btn-danger btn-sm">
+            Delete
+        </button>
+    </form>
+</td>
+            <?php endwhile; ?>
+
+
+
+        </table>
+    </div>
+</div>
+
 
     <!-- ══════════════ SIT-IN RECORDS TAB ══════════════ -->
     <?php elseif ($active_tab === 'records'): ?>
@@ -1221,25 +1374,31 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
 
 
     <!-- ══════════════ REPORTS / FEEDBACK / RESERVATION STUBS ══════════════ -->
-    <?php elseif (in_array($active_tab, ['reports','feedback','reservation'])): ?>
+    <!-- REJECT -->
+                        <form method="POST" style="display:inline;">
+                            <input type="hidden" name="res_id" value="<?= $r['id'] ?>">
+                            <input type="hidden" name="status" value="rejected">
+                            <button name="update_reservation" class="btn btn-danger btn-sm">
+                                Reject
+                            </button>
+                        </form>
 
-    <div class="dash-card">
-        <div class="card-header-purple">
-            <span>
-                <?php
-                if ($active_tab === 'reports')      echo '<i class="bi bi-bar-chart-fill me-2"></i>Sit-in Reports';
-                elseif ($active_tab === 'feedback')  echo '<i class="bi bi-chat-left-text-fill me-2"></i>Feedback Reports';
-                else                                 echo '<i class="bi bi-calendar-check-fill me-2"></i>Reservation';
-                ?>
-            </span>
-        </div>
-        <div class="card-body p-5 text-center text-muted">
-            <i class="bi bi-tools" style="font-size:2.5rem;color:#ccc;"></i>
-            <p class="mt-3 mb-0">This section is under construction.</p>
-        </div>
+                        <?php else: ?>
+                            <span class="text-muted">Done</span>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+
+           <?php while ($r = $res->fetch_assoc()): ?>
+    <tr>
+        <td><?= $r['id'] ?></td>
+    </tr>
+<?php endwhile; ?>
+
+            </tbody>
+        </table>
     </div>
-
-    <?php endif; ?>
+</div>
 
     </div><!-- end content-area -->
 </div><!-- end main-content -->
@@ -1250,7 +1409,42 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
 <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
 <script>
+
+    function confirmLogout(e) {
+    e.preventDefault();
+    Swal.fire({
+        title: 'Logging out?',
+        text: 'Are you sure you want to log out of the admin panel?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: '<i class="bi bi-box-arrow-right me-1"></i> Yes, Logout',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#9757d6',
+        cancelButtonColor: '#6c757d',
+        background: '#fff',
+        customClass: {
+            popup: 'rounded-4',
+            confirmButton: 'fw-bold',
+            cancelButton: 'fw-bold'
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            Swal.fire({
+                title: 'Logged out!',
+                text: 'You have been logged out successfully.',
+                icon: 'success',
+                timer: 1500,
+                showConfirmButton: false,
+                confirmButtonColor: '#9757d6',
+            }).then(() => {
+                window.location.href = 'landingpage.php';
+            });
+        }
+    });
+}
 $(document).ready(function () {
     const dtLang = { emptyTable: "No data available", zeroRecords: "No matching records found" };
     if ($('#studentTable').length)  $('#studentTable').DataTable({ pageLength:10, order:[[0,'asc']], language: dtLang });

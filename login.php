@@ -1,12 +1,6 @@
 <?php
 session_start();
 
-$nav_items = [
-    'Home' => 'landingpage.php',
-    'About' => 'about.php'
-];
-
-// Hardcoded admin credentials
 $admin_username = "admin";
 $admin_password = "admin123";
 
@@ -14,13 +8,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $id_number = trim($_POST['id_number']);
     $password  = trim($_POST['password']);
 
-    // Check if admin first
     if ($id_number === $admin_username && $password === $admin_password) {
         $_SESSION['admin'] = $admin_username;
-        header("Location: admin_dashboard.php");
+        $_SESSION['login_success'] = [
+            'name'     => 'Admin',
+            'redirect' => 'admin_dashboard.php'
+        ];
+        header("Location: login.php");
         exit();
     } else {
-        // Regular student login — check DB
         $conn = new mysqli("localhost", "root", "", "sysarch");
         if ($conn->connect_error) {
             die("Connection failed: " . $conn->connect_error);
@@ -35,7 +31,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($user && password_verify($password, $user['password'])) {
             $_SESSION['user']      = $user['id_number'];
             $_SESSION['user_data'] = $user;
-            header("Location: students_dashboard.php");
+            $_SESSION['login_success'] = [
+                'name'     => $user['first_name'],
+                'redirect' => 'students_dashboard.php'
+            ];
+            header("Location: login.php");
             exit();
         } else {
             $error = 'invalid';
@@ -48,6 +48,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $showSuccess = isset($_GET['success']) && $_GET['success'] == '1';
 $error       = isset($error) ? $error : (isset($_GET['error']) ? $_GET['error'] : '');
+
+// Capture and clear login_success BEFORE rendering
+$login_success = null;
+if (isset($_SESSION['login_success'])) {
+    $login_success = $_SESSION['login_success'];
+    unset($_SESSION['login_success']);
+}
 ?>
 
 <!DOCTYPE html>
@@ -58,6 +65,7 @@ $error       = isset($error) ? $error : (isset($_GET['error']) ? $_GET['error'] 
     <title>Login - CCS Sit-in Monitoring System</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         :root {
             --uc-blue: #a1cbf7;
@@ -116,6 +124,7 @@ $error       = isset($error) ? $error : (isset($_GET['error']) ? $_GET['error'] 
             border-radius: 8px;
             margin-top: 20px;
             border: none;
+            cursor: pointer;
         }
         .btn-login:hover {
             background-color: #0056b3;
@@ -151,8 +160,8 @@ $error       = isset($error) ? $error : (isset($_GET['error']) ? $_GET['error'] 
             <?php if ($error): ?>
                 <div class="alert alert-danger mt-3" role="alert">
                     <?php
-                        if ($error === 'invalid')     echo 'Invalid ID number or password.';
-                        elseif ($error === 'nouser')  echo 'No account found with that ID.';
+                        if ($error === 'invalid')    echo 'Invalid ID number or password.';
+                        elseif ($error === 'nouser') echo 'No account found with that ID.';
                         else echo htmlspecialchars($error);
                     ?>
                 </div>
@@ -165,20 +174,19 @@ $error       = isset($error) ? $error : (isset($_GET['error']) ? $_GET['error'] 
                     <label class="form-label">ID Number</label>
                     <input type="text" name="id_number" class="form-control" required>
                 </div>
-
                 <div class="mb-3">
                     <label class="form-label">Password</label>
                     <input type="password" name="password" class="form-control" required>
                 </div>
-
                 <button type="submit" class="btn-login">Sign in</button>
             </form>
 
             <p class="mt-3 small text-center">
                 Don't have an account? <a href="register.php">Register here</a>.
             </p>
-        </div>
-    </div>
+
+        </div><!-- end login-card -->
+    </div><!-- end login-container -->
 </main>
 
 <footer class="text-center py-4">
@@ -186,5 +194,22 @@ $error       = isset($error) ? $error : (isset($_GET['error']) ? $_GET['error'] 
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<?php if ($login_success): ?>
+<script>
+Swal.fire({
+    title: 'Login Successful! 🎉',
+    text: 'Welcome back, <?= htmlspecialchars($login_success['name']) ?>!',
+    icon: 'success',
+    timer: 2000,
+    showConfirmButton: false,
+    timerProgressBar: true,
+    confirmButtonColor: '#9757d6',
+}).then(() => {
+    window.location.href = '<?= htmlspecialchars($login_success['redirect']) ?>';
+});
+</script>
+<?php endif; ?>
+
 </body>
 </html>
