@@ -12,26 +12,28 @@ if ($conn->connect_error) {
 
 // ── Handle POST actions ──────────────────────────────────────────────
 
-  $date = $_POST['reservation_date'];
-
+// EDIT reservation
+if (isset($_POST['edit_reservation'])) {
+    $id      = intval($_POST['id']);
+    $purpose = $conn->real_escape_string(trim($_POST['purpose']));
+    $lab     = $conn->real_escape_string(trim($_POST['lab']));
+    $time    = $conn->real_escape_string(trim($_POST['preferred_time']));
+    $date    = $_POST['reservation_date'];
     $stmt = $conn->prepare("UPDATE reservations 
         SET purpose=?, lab=?, preferred_time=?, reservation_date=? 
         WHERE id=?");
     $stmt->bind_param("ssssi", $purpose, $lab, $time, $date, $id);
     $stmt->execute();
-
     header("Location: admin_dashboard.php?tab=reservation");
     exit();
-
+}
 
 // DELETE reservation
 if (isset($_POST['delete_reservation'])) {
-    $id = $_POST['id'];
-
+    $id = intval($_POST['id']);
     $stmt = $conn->prepare("DELETE FROM reservations WHERE id=?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
-
     header("Location: admin_dashboard.php?tab=reservation");
     exit();
 }
@@ -40,9 +42,7 @@ if (isset($_POST['delete_reservation'])) {
 if (isset($_POST['update_reservation'])) {
     $res_id = intval($_POST['res_id']);
     $status = $conn->real_escape_string($_POST['status']);
-
     $conn->query("UPDATE reservations SET status = '$status' WHERE id = $res_id");
-
     header("Location: admin_dashboard.php?tab=reservation");
     exit();
 }
@@ -130,13 +130,10 @@ if (isset($_POST['do_sitin'])) {
 // Logout a sit-in session
 if (isset($_POST['logout_session'])) {
     $sit_id = intval($_POST['sit_id']);
-    // Get the student's id_number from this sit-in record
     $rec = $conn->query("SELECT id_number FROM sitin_records WHERE id = $sit_id")->fetch_assoc();
     if ($rec) {
         $student_id = $conn->real_escape_string($rec['id_number']);
-        // Set logout time
         $conn->query("UPDATE sitin_records SET logout_time = NOW() WHERE id = $sit_id");
-        // Decrement remaining_session (floor at 0)
         $conn->query("UPDATE users SET remaining_session = GREATEST(0, remaining_session - 1) WHERE id_number = '$student_id'");
     }
     header("Location: admin_dashboard.php?tab=sitin"); exit();
@@ -144,11 +141,8 @@ if (isset($_POST['logout_session'])) {
 
 // Reset all active sessions
 if (isset($_POST['reset_all_sessions'])) {
-    // Get all active student IDs before resetting
     $active_students = $conn->query("SELECT DISTINCT id_number FROM sitin_records WHERE logout_time IS NULL");
-    // Set logout on all
     $conn->query("UPDATE sitin_records SET logout_time = NOW() WHERE logout_time IS NULL");
-    // Decrement each student's remaining_session
     if ($active_students && $active_students->num_rows > 0) {
         while ($s = $active_students->fetch_assoc()) {
             $sid = $conn->real_escape_string($s['id_number']);
@@ -216,100 +210,80 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
             overflow-x: hidden;
         }
 
-        /* ─── TOP NAVBAR (MATCH SIDEBAR STYLE) ─── */
-.top-navbar {
-    position: fixed;
-    top: 0;
-    left: 0;           /* Ensures it starts at the very left */
-    width: 100%;       /* Spans the full width of the screen */
-    height: 60px;
-    z-index: 1000;     /* Keeps it above other elements */
+        /* ─── TOP NAVBAR ─── */
+        .top-navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 60px;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            background: linear-gradient(160deg, var(--ccs-purple) 0%, #6a3fa0 50%, #2e6da4 100%);
+            box-shadow: 0 4px 20px rgba(151,87,214,0.25);
+        }
 
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+        .nav-left .brand-title {
+            color: white;
+            font-weight: 700;
+            font-size: 0.95rem;
+        }
 
-    /* Reduced padding to ensure links don't wrap and colors align */
-    padding: 0 20px; 
+        .nav-links {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
 
-    background: linear-gradient(160deg, var(--ccs-purple) 0%, #6a3fa0 50%, #2e6da4 100%);
-    box-shadow: 0 4px 20px rgba(151,87,214,0.25);
-}
-/* LEFT TITLE */
-.nav-left .brand-title {
-    color: white;
-    font-weight: 700;
-    font-size: 0.95rem;
-}
+        .nav-links a {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: rgba(255,255,255,0.75);
+            text-decoration: none;
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 0.78rem;
+            transition: all 0.2s ease;
+        }
 
-/* NAV LINKS */
-.nav-links {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-}
+        .nav-links a:hover {
+            background: rgba(255,255,255,0.12);
+            color: white;
+        }
 
-.nav-links a {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+        .nav-links a.active {
+            background: rgba(255,255,255,0.18);
+            color: white;
+            font-weight: 600;
+        }
 
-    color: rgba(255,255,255,0.75);
-    text-decoration: none;
+        .btn-logout-top {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255,215,0,0.15);
+            border: 1px solid rgba(255,215,0,0.35);
+            color: var(--ccs-gold);
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
 
-    padding: 6px 10px;
-    border-radius: 8px;
-    font-size: 0.78rem;
+        .btn-logout-top:hover {
+            background: var(--ccs-gold);
+            color: #333;
+        }
 
-    transition: all 0.2s ease;
-}
-
-/* HOVER (same feel as sidebar) */
-.nav-links a:hover {
-    background: rgba(255,255,255,0.12);
-    color: white;
-}
-
-/* ACTIVE TAB */
-.nav-links a.active {
-    background: rgba(255,255,255,0.18);
-    color: white;
-    font-weight: 600;
-}
-
-/* LOGOUT BUTTON */
-.btn-logout-top {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-
-    background: rgba(255,215,0,0.15);
-    border: 1px solid rgba(255,215,0,0.35);
-    color: var(--ccs-gold);
-
-    padding: 6px 12px;
-    border-radius: 8px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    text-decoration: none;
-
-    transition: all 0.2s;
-}
-
-.btn-logout-top:hover {
-    background: var(--ccs-gold);
-    color: #333;
-}
-
-/* ─── FIX CONTENT POSITION ─── */
-.main-content {
-    margin-left: var(--sidebar-width);
-    margin-top: 60px; /* space for navbar */
-    padding: 0;
-}
         /* ── Main content ── */
         .main-content {
-            margin-left: var(--sidebar-width);
+            margin-top: 60px;
             padding: 0;
             min-height: 100vh;
         }
@@ -337,7 +311,7 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
             backdrop-filter: blur(4px);
         }
 
-        /* ── Content area (lifted card effect) ── */
+        /* ── Content area ── */
         .content-area {
             padding: 0 24px 30px;
             margin-top: -36px;
@@ -470,6 +444,30 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
             font-size: 0.72rem;
             font-weight: 600;
         }
+        .badge-pending {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.72rem;
+            font-weight: 600;
+        }
+        .badge-approved {
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
+            color: white;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.72rem;
+            font-weight: 600;
+        }
+        .badge-rejected {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 0.72rem;
+            font-weight: 600;
+        }
 
         /* ── Buttons ── */
         .btn-purple {
@@ -583,7 +581,6 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
 
         /* ── Footer ── */
         footer {
-            margin-left: var(--sidebar-width);
             padding: 24px;
             text-align: center;
             color: #aaa;
@@ -596,7 +593,6 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
 
 <!-- ════ TOP NAVBAR ════ -->
 <nav class="top-navbar">
-
     <div class="nav-left">
         <span class="brand-title">
             <i class="bi bi-cpu-fill me-1"></i> CCS Sit-in Monitoring
@@ -607,41 +603,34 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
         <a href="admin_dashboard.php?tab=students" class="<?= $active_tab==='students'?'active':'' ?>">
             <i class="bi bi-people-fill"></i> Students
         </a>
-
         <a href="admin_dashboard.php?tab=sitinform" class="<?= $active_tab==='sitinform'?'active':'' ?>">
             <i class="bi bi-box-arrow-in-right"></i> Sit-in
         </a>
-
         <a href="admin_dashboard.php?tab=sitin" class="<?= $active_tab==='sitin'?'active':'' ?>">
             <i class="bi bi-display"></i> Current
         </a>
-
         <a href="admin_dashboard.php?tab=records" class="<?= $active_tab==='records'?'active':'' ?>">
             <i class="bi bi-table"></i> Records
         </a>
-
         <a href="admin_dashboard.php?tab=announcements" class="<?= $active_tab==='announcements'?'active':'' ?>">
             <i class="bi bi-megaphone-fill"></i> Announcements
         </a>
-
         <a href="admin_dashboard.php?tab=reports" class="<?= $active_tab==='reports'?'active':'' ?>">
             <i class="bi bi-bar-chart-fill"></i> Reports
         </a>
-
         <a href="admin_dashboard.php?tab=feedback" class="<?= $active_tab==='feedback'?'active':'' ?>">
             <i class="bi bi-chat-left-text-fill"></i> Feedback
         </a>
-
         <a href="admin_dashboard.php?tab=reservation" class="<?= $active_tab==='reservation'?'active':'' ?>">
             <i class="bi bi-calendar-check-fill"></i> Reservation
         </a>
     </div>
 
-  <a href="#" class="btn-logout-top" onclick="confirmLogout(event)">
-    <i class="bi bi-box-arrow-right"></i> Logout
-</a>
-
+    <a href="#" class="btn-logout-top" onclick="confirmLogout(event)">
+        <i class="bi bi-box-arrow-right"></i> Logout
+    </a>
 </nav>
+
 <!-- ════ MAIN CONTENT ════ -->
 <div class="main-content">
 
@@ -778,7 +767,7 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
             title: 'Success!',
             text: 'Logout successfully',
             icon: 'success',
-            confirmButtonColor: '#9757d6', // Matches your CCS Purple
+            confirmButtonColor: '#9757d6',
             timer: 3000
         });
         window.history.replaceState({}, document.title, window.location.pathname);
@@ -857,36 +846,11 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
         </div>
     </div>
 
-            <!-- Hidden delete form -->
-            <form method="POST" id="deleteStudentForm">
-                <input type="hidden" name="del_idnumber" id="del_idnumber">
-                <input type="hidden" name="delete_student" value="1">
-            </form>
-
-            <div class="modal fade" id="editModal<?= $r['id'] ?>" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-            <form method="POST">
-                <div class="modal-header">
-                <h5>Edit Reservation</h5>
-                </div>
-
-                <div class="modal-body">
-                <input type="hidden" name="id" value="<?= $r['id'] ?>">
-
-                <input type="text" name="purpose" value="<?= $r['purpose'] ?>" class="form-control mb-2" required>
-                <input type="text" name="lab" value="<?= $r['lab'] ?>" class="form-control mb-2" required>
-                <input type="text" name="preferred_time" value="<?= $r['preferred_time'] ?>" class="form-control mb-2" required>
-                <input type="date" name="reservation_date" value="<?= $r['reservation_date'] ?>" class="form-control mb-2" required>
-                </div>
-
-                <div class="modal-footer">
-                <button name="edit_reservation" class="btn btn-primary">Save</button>
-                </div>
-            </form>
-            </div>
-        </div>
-        </div>
+    <!-- Hidden delete form -->
+    <form method="POST" id="deleteStudentForm">
+        <input type="hidden" name="del_idnumber" id="del_idnumber">
+        <input type="hidden" name="delete_student" value="1">
+    </form>
 
     <!-- ── Add Student Modal ── -->
     <div class="modal fade" id="addStudentModal" tabindex="-1" aria-hidden="true">
@@ -1174,89 +1138,13 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
                             </button>
                         </td>
                     </tr>
-                <?php endwhile; endif; ?>
+                <?php endwhile; else: ?>
+                    <tr><td colspan="9" class="text-center text-muted py-3">No active sit-in sessions.</td></tr>
+                <?php endif; ?>
                 </tbody>
             </table>
         </div>
     </div>
-
-        <!-- ══════════════ Reservations TAB ══════════════ -->
-
-    <?php elseif ($active_tab === 'reservation'): ?>
-
-<div class="dash-card">
-    <div class="card-header-purple">
-        <span>Student Reservations</span>
-    </div>
-
-    <div class="card-body">
-        <table class="table table-bordered">
-            <tr>
-                <th>ID</th>
-                <th>Student ID</th>
-                <th>Purpose</th>
-                <th>Lab</th>
-                <th>Time</th>
-                <th>Date</th>
-                <th>Status</th>
-                <th>Action</th>
-            </tr>
-
-            <?php
-            $res = $conn->query("SELECT * FROM reservations");
-
-            while ($r = $res->fetch_assoc()):
-            ?>
-
-            <tr>
-                <td><?= $r['id'] ?></td>
-                <td><?= $r['id_number'] ?></td>
-                <td><?= $r['purpose'] ?></td>
-                <td><?= $r['lab'] ?></td>
-                <td><?= $r['preferred_time'] ?></td>
-                <td><?= $r['reservation_date'] ?></td>
-                <td><?= $r['status'] ?></td>
-
-                <td>
-                    <?php if ($r['status'] === 'pending'): ?>
-
-                    <form method="POST" style="display:inline;">
-                        <input type="hidden" name="res_id" value="<?= $r['id'] ?>">
-                        <input type="hidden" name="status" value="approved">
-                        <button name="update_reservation">Approve</button>
-                    </form>
-
-                    <form method="POST" style="display:inline;">
-                        <input type="hidden" name="res_id" value="<?= $r['id'] ?>">
-                        <input type="hidden" name="status" value="rejected">
-                        <button name="update_reservation">Reject</button>
-                    </form>
-
-                    <?php endif; ?>
-                </td>
-            </tr>
-            
-            <td>
-    <!-- EDIT -->
-    <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#editModal<?= $r['id'] ?>">
-        Edit
-    </button>
-
-    <!-- DELETE -->
-    <form method="POST" style="display:inline;">
-        <input type="hidden" name="id" value="<?= $r['id'] ?>">
-        <button name="delete_reservation" class="btn btn-danger btn-sm">
-            Delete
-        </button>
-    </form>
-</td>
-            <?php endwhile; ?>
-
-
-
-        </table>
-    </div>
-</div>
 
 
     <!-- ══════════════ SIT-IN RECORDS TAB ══════════════ -->
@@ -1308,7 +1196,9 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
                             <?php endif; ?>
                         </td>
                     </tr>
-                <?php endwhile; endif; ?>
+                <?php endwhile; else: ?>
+                    <tr><td colspan="8" class="text-center text-muted py-3">No sit-in records found.</td></tr>
+                <?php endif; ?>
                 </tbody>
             </table>
         </div>
@@ -1373,32 +1263,277 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
     </div>
 
 
-    <!-- ══════════════ REPORTS / FEEDBACK / RESERVATION STUBS ══════════════ -->
-    <!-- REJECT -->
-                        <form method="POST" style="display:inline;">
-                            <input type="hidden" name="res_id" value="<?= $r['id'] ?>">
-                            <input type="hidden" name="status" value="rejected">
-                            <button name="update_reservation" class="btn btn-danger btn-sm">
-                                Reject
-                            </button>
-                        </form>
+    <!-- ══════════════ REPORTS TAB ══════════════ -->
+    <?php elseif ($active_tab === 'reports'): ?>
 
-                        <?php else: ?>
-                            <span class="text-muted">Done</span>
-                        <?php endif; ?>
-                    </td>
-                </tr>
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="dash-card">
+                <div class="card-header-purple">
+                    <span><i class="bi bi-pie-chart-fill me-2"></i>Sessions by Purpose</span>
+                </div>
+                <div class="card-body p-3">
+                    <div class="chart-wrapper">
+                        <canvas id="reportPurposeChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="dash-card">
+                <div class="card-header-purple">
+                    <span><i class="bi bi-bar-chart-fill me-2"></i>Sessions by Lab</span>
+                </div>
+                <div class="card-body p-3">
+                    <div class="chart-wrapper">
+                        <canvas id="reportLabChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-           <?php while ($r = $res->fetch_assoc()): ?>
-    <tr>
-        <td><?= $r['id'] ?></td>
-    </tr>
-<?php endwhile; ?>
+    <?php
+    $lab_result = $conn->query("SELECT lab, COUNT(*) as cnt FROM sitin_records GROUP BY lab");
+    $lab_labels = []; $lab_data = [];
+    if ($lab_result) while ($row = $lab_result->fetch_assoc()) {
+        $lab_labels[] = $row['lab'];
+        $lab_data[]   = $row['cnt'];
+    }
+    ?>
+    <script>
+    new Chart(document.getElementById('reportPurposeChart'), {
+        type: 'doughnut',
+        data: {
+            labels: <?= json_encode($lang_labels ?: ['No Data']) ?>,
+            datasets: [{
+                data: <?= json_encode($lang_data ?: [1]) ?>,
+                backgroundColor: ['#9757d6','#a1cbf7','#27ae60','#f39c12','#e74c3c','#3498db','#FFD700'],
+                borderWidth: 2, borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom', labels: { font:{ family:'Poppins', size:11 }, boxWidth:14 } } }
+        }
+    });
+    new Chart(document.getElementById('reportLabChart'), {
+        type: 'bar',
+        data: {
+            labels: <?= json_encode($lab_labels ?: ['No Data']) ?>,
+            datasets: [{
+                label: 'Sessions',
+                data: <?= json_encode($lab_data ?: [0]) ?>,
+                backgroundColor: '#9757d6',
+                borderRadius: 8
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+        }
+    });
+    </script>
 
-            </tbody>
-        </table>
+
+  <!-- ══════════════ FEEDBACK TAB ══════════════ -->
+<?php elseif ($active_tab === 'feedback'): ?>
+
+<div class="dash-card">
+    <div class="card-header-purple">
+        <span><i class="bi bi-chat-left-text-fill me-2"></i>Student Feedback</span>
+    </div>
+    <div class="card-body p-3">
+        <?php
+        $feedback_check = $conn->query("SHOW TABLES LIKE 'feedback'");
+        if ($feedback_check && $feedback_check->num_rows > 0):
+            $fb = $conn->query("
+                SELECT f.*, 
+                    CONCAT(COALESCE(u.first_name,''), ' ', COALESCE(u.last_name,'')) AS student_name,
+                    sr.purpose, sr.lab, sr.login_time
+                FROM feedback f
+                LEFT JOIN users u ON f.id_number = u.id_number
+                LEFT JOIN sitin_records sr ON f.sitin_id = sr.id
+                ORDER BY f.created_at DESC
+            ");
+            if ($fb && $fb->num_rows > 0):
+        ?>
+            <table id="feedbackTable" class="table table-bordered table-hover w-100">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Student</th>
+                        <th>ID Number</th>
+                        <th>Lab</th>
+                        <th>Purpose</th>
+                        <th>Session Date</th>
+                        <th>Feedback</th>
+                        <th>Submitted</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php while ($f = $fb->fetch_assoc()): ?>
+                    <tr>
+                        <td><?= $f['id'] ?></td>
+                        <td><?= htmlspecialchars(trim($f['student_name']) ?: '—') ?></td>
+                        <td><?= htmlspecialchars($f['id_number']) ?></td>
+                        <td><?= htmlspecialchars($f['lab'] ?? '—') ?></td>
+                        <td><?= htmlspecialchars($f['purpose'] ?? '—') ?></td>
+                        <td><?= htmlspecialchars($f['login_time'] ?? '—') ?></td>
+                        <td style="max-width:260px;">
+                            <div style="font-size:0.83rem;color:#333;font-style:italic;">
+                                "<?= htmlspecialchars($f['message']) ?>"
+                            </div>
+                        </td>
+                        <td><?= htmlspecialchars($f['created_at']) ?></td>
+                    </tr>
+                <?php endwhile; ?>
+                </tbody>
+            </table>
+        <?php else: ?>
+            <p class="text-muted mb-0" style="font-size:0.85rem;">
+                <i class="bi bi-inbox me-2"></i>No feedback submitted yet.
+            </p>
+        <?php endif; else: ?>
+            <p class="text-muted mb-0" style="font-size:0.85rem;">
+                <i class="bi bi-exclamation-triangle me-2"></i>Feedback table not found. Please run the SQL setup.
+            </p>
+        <?php endif; ?>
     </div>
 </div>
+
+
+    <!-- ══════════════ RESERVATION TAB ══════════════ -->
+    <?php elseif ($active_tab === 'reservation'): ?>
+
+    <div class="dash-card">
+        <div class="card-header-purple">
+            <span><i class="bi bi-calendar-check-fill me-2"></i>Student Reservations</span>
+        </div>
+        <div class="card-body p-3">
+            <table id="reservationTable" class="table table-bordered table-hover w-100">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Student ID</th>
+                        <th>Purpose</th>
+                        <th>Lab</th>
+                        <th>Time</th>
+                        <th>Date</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php
+                $res = $conn->query("SELECT * FROM reservations ORDER BY id DESC");
+                if ($res && $res->num_rows > 0):
+                    while ($r = $res->fetch_assoc()):
+                ?>
+                    <tr>
+                        <td><?= $r['id'] ?></td>
+                        <td><?= htmlspecialchars($r['id_number']) ?></td>
+                        <td><?= htmlspecialchars($r['purpose']) ?></td>
+                        <td><?= htmlspecialchars($r['lab']) ?></td>
+                        <td><?= htmlspecialchars($r['preferred_time']) ?></td>
+                        <td><?= htmlspecialchars($r['reservation_date']) ?></td>
+                        <td>
+                            <?php
+                            $status = $r['status'];
+                            if ($status === 'pending'):
+                            ?><span class="badge-pending">Pending</span><?php
+                            elseif ($status === 'approved'):
+                            ?><span class="badge-approved">Approved</span><?php
+                            elseif ($status === 'rejected'):
+                            ?><span class="badge-rejected">Rejected</span><?php
+                            else:
+                            ?><span class="badge-done"><?= htmlspecialchars($status) ?></span><?php
+                            endif;
+                            ?>
+                        </td>
+                        <td>
+                            <?php if ($r['status'] === 'pending'): ?>
+                                <form method="POST" style="display:inline;">
+                                    <input type="hidden" name="res_id" value="<?= $r['id'] ?>">
+                                    <input type="hidden" name="status" value="approved">
+                                    <button name="update_reservation" class="btn btn-success btn-sm">
+                                        <i class="bi bi-check-lg"></i> Approve
+                                    </button>
+                                </form>
+                                <form method="POST" style="display:inline;">
+                                    <input type="hidden" name="res_id" value="<?= $r['id'] ?>">
+                                    <input type="hidden" name="status" value="rejected">
+                                    <button name="update_reservation" class="btn btn-danger btn-sm">
+                                        <i class="bi bi-x-lg"></i> Reject
+                                    </button>
+                                </form>
+                            <?php else: ?>
+                                <span class="text-muted" style="font-size:0.82rem;">—</span>
+                            <?php endif; ?>
+                            <button class="btn btn-warning btn-sm"
+                                data-bs-toggle="modal"
+                                data-bs-target="#editResModal<?= $r['id'] ?>">
+                                <i class="bi bi-pencil-fill"></i> Edit
+                            </button>
+                            <form method="POST" style="display:inline;"
+                                onsubmit="return confirm('Delete this reservation?')">
+                                <input type="hidden" name="id" value="<?= $r['id'] ?>">
+                                <button name="delete_reservation" class="btn btn-danger btn-sm">
+                                    <i class="bi bi-trash-fill"></i> Delete
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+
+                    <!-- Edit Reservation Modal -->
+                    <div class="modal fade" id="editResModal<?= $r['id'] ?>" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered">
+                            <div class="modal-content">
+                                <form method="POST">
+                                    <div class="modal-header-purple d-flex justify-content-between align-items-center">
+                                        <h6 class="mb-0 fw-bold"><i class="bi bi-pencil-fill me-2"></i>Edit Reservation #<?= $r['id'] ?></h6>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body p-4">
+                                        <input type="hidden" name="id" value="<?= $r['id'] ?>">
+                                        <div class="mb-3">
+                                            <label class="form-label" style="font-size:0.78rem;color:#777;">Purpose</label>
+                                            <input type="text" name="purpose" value="<?= htmlspecialchars($r['purpose']) ?>" class="form-control" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label" style="font-size:0.78rem;color:#777;">Lab</label>
+                                            <input type="text" name="lab" value="<?= htmlspecialchars($r['lab']) ?>" class="form-control" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label" style="font-size:0.78rem;color:#777;">Preferred Time</label>
+                                            <input type="text" name="preferred_time" value="<?= htmlspecialchars($r['preferred_time']) ?>" class="form-control" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label" style="font-size:0.78rem;color:#777;">Reservation Date</label>
+                                            <input type="date" name="reservation_date" value="<?= htmlspecialchars($r['reservation_date']) ?>" class="form-control" required>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                                        <button name="edit_reservation" class="btn btn-purple px-4">
+                                            <i class="bi bi-save-fill me-1"></i> Save Changes
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                <?php endwhile; else: ?>
+                    <tr><td colspan="8" class="text-center text-muted py-3">No reservations found.</td></tr>
+                <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <?php endif; ?>
 
     </div><!-- end content-area -->
 </div><!-- end main-content -->
@@ -1412,8 +1547,7 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
-
-    function confirmLogout(e) {
+function confirmLogout(e) {
     e.preventDefault();
     Swal.fire({
         title: 'Logging out?',
@@ -1445,11 +1579,25 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
         }
     });
 }
+
 $(document).ready(function () {
     const dtLang = { emptyTable: "No data available", zeroRecords: "No matching records found" };
-    if ($('#studentTable').length)  $('#studentTable').DataTable({ pageLength:10, order:[[0,'asc']], language: dtLang });
-    if ($('#sitinTable').length)    $('#sitinTable').DataTable({ pageLength:10, order:[[0,'desc']], language: dtLang });
-    if ($('#recordTable').length)   $('#recordTable').DataTable({ pageLength:10, order:[[0,'desc']], language: dtLang });
+    if ($('#studentTable').length)     $('#studentTable').DataTable({ pageLength:10, order:[[0,'asc']], language: dtLang });
+   if ($('#sitinTable').length) {
+    $.fn.dataTable.ext.errMode = 'none'; // suppress the warning popup
+    $('#sitinTable').DataTable({
+        pageLength: 10,
+        order: [[0, 'desc']],
+        language: dtLang,
+        columnDefs: [
+            { targets: -1, orderable: false, searchable: false }
+        ]
+    });
+}
+    $.fn.dataTable.ext.errMode = 'none';
+    if ($('#recordTable').length)      $('#recordTable').DataTable({ pageLength:10, order:[[0,'desc']], language: dtLang });
+    if ($('#reservationTable').length) $('#reservationTable').DataTable({ pageLength:10, order:[[0,'desc']], language: dtLang });
+    if ($('#feedbackTable').length)    $('#feedbackTable').DataTable({ pageLength:10, order:[[0,'desc']], language: dtLang });
 });
 
 // ── Sit-in student search ──

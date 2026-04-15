@@ -132,7 +132,26 @@ if ($res_table_exists) {
         }
     }
 }
+
+// ── Submit Feedback ──────────────────────────────────────────────────
+if (isset($_POST['submit_feedback'])) {
+    $sitin_id = intval($_POST['sitin_id']);
+    $message  = $conn->real_escape_string(trim($_POST['feedback_message']));
+    if ($message !== '') {
+        // Check if feedback already exists for this session
+        $existing = $conn->query("SELECT id FROM feedback WHERE sitin_id = $sitin_id AND id_number = '$id_number'");
+        if ($existing && $existing->num_rows === 0) {
+            $conn->query("INSERT INTO feedback (sitin_id, id_number, message, created_at) VALUES ($sitin_id, '$id_number', '$message', NOW())");
+            $feedback_success = "Feedback submitted!";
+        } else {
+            $feedback_error = "You already submitted feedback for this session.";
+        }
+    }
+}
+
 ?>
+
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -661,30 +680,77 @@ if ($res_table_exists) {
 
 <!-- ════ HISTORY MODAL ════ -->
 <div class="modal fade" id="historyModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
         <div class="modal-content">
             <div class="modal-header-purple d-flex justify-content-between align-items-center">
                 <h6 class="mb-0 fw-bold"><i class="bi bi-clock-history me-2"></i>Sit-in History</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-0">
+                <?php if (isset($feedback_success)): ?>
+                    <div class="alert alert-success py-2 px-3 m-3 mb-0" style="border-radius:8px;font-size:0.83rem;">
+                        <i class="bi bi-check-circle-fill me-2"></i><?= htmlspecialchars($feedback_success) ?>
+                    </div>
+                <?php endif; ?>
+                <?php if (isset($feedback_error)): ?>
+                    <div class="alert alert-warning py-2 px-3 m-3 mb-0" style="border-radius:8px;font-size:0.83rem;">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i><?= htmlspecialchars($feedback_error) ?>
+                    </div>
+                <?php endif; ?>
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
-                        <thead><tr><th>Login Time</th><th>Purpose</th><th>Lab</th><th>Logout Time</th><th>Status</th></tr></thead>
+                        <thead>
+                            <tr>
+                                <th>Login Time</th>
+                                <th>Purpose</th>
+                                <th>Lab</th>
+                                <th>Logout Time</th>
+                                <th>Status</th>
+                                <th>Feedback</th>
+                            </tr>
+                        </thead>
                         <tbody>
-                        <?php $sessions->data_seek(0);
+                        <?php
+                        $sessions->data_seek(0);
+                        // Fetch all existing feedback for this student
+                        $fb_map = [];
+                        $fb_res = $conn->query("SELECT sitin_id, message FROM feedback WHERE id_number = '$id_number'");
+                        if ($fb_res) while ($fb = $fb_res->fetch_assoc()) $fb_map[$fb['sitin_id']] = $fb['message'];
+
                         if ($sessions && $sessions->num_rows > 0):
                             while ($s = $sessions->fetch_assoc()):
-                                $is_active = empty($s['logout_time']); ?>
+                                $is_active = empty($s['logout_time']);
+                                $has_feedback = isset($fb_map[$s['id']]);
+                        ?>
                             <tr>
                                 <td><?= htmlspecialchars($s['login_time']) ?></td>
                                 <td><?= htmlspecialchars($s['purpose']) ?></td>
                                 <td><?= htmlspecialchars($s['lab']) ?></td>
                                 <td><?= $is_active ? '<span class="text-muted">—</span>' : htmlspecialchars($s['logout_time']) ?></td>
                                 <td><?= $is_active ? '<span class="badge-active">Active</span>' : '<span class="badge-done">Done</span>' ?></td>
+                                <td>
+                                    <?php if ($is_active): ?>
+                                        <span class="text-muted" style="font-size:0.75rem;">Session ongoing</span>
+                                    <?php elseif ($has_feedback): ?>
+                                        <span style="font-size:0.75rem;color:#27ae60;font-weight:600;">
+                                            <i class="bi bi-check-circle-fill me-1"></i>Submitted
+                                        </span>
+                                        <div style="font-size:0.72rem;color:#888;font-style:italic;max-width:160px;">
+                                            "<?= htmlspecialchars($fb_map[$s['id']]) ?>"
+                                        </div>
+                                    <?php else: ?>
+                                        <button class="btn btn-sm btn-purple"
+                                            style="font-size:0.72rem;padding:3px 10px;border-radius:6px;"
+                                            onclick="openFeedbackForm(<?= $s['id'] ?>)">
+                                            <i class="bi bi-chat-left-text me-1"></i>Give Feedback
+                                        </button>
+                                    <?php endif; ?>
+                                </td>
                             </tr>
                         <?php endwhile; else: ?>
-                            <tr><td colspan="5" class="text-center text-muted py-3"><i class="bi bi-inbox me-2"></i>No sit-in history found.</td></tr>
+                            <tr><td colspan="6" class="text-center text-muted py-3">
+                                <i class="bi bi-inbox me-2"></i>No sit-in history found.
+                            </td></tr>
                         <?php endif; ?>
                         </tbody>
                     </table>
@@ -694,6 +760,34 @@ if ($res_table_exists) {
     </div>
 </div>
 
+<!-- ════ FEEDBACK MODAL ════ -->
+<div class="modal fade" id="feedbackModal" tabindex="-1" aria-hidden="true" style="z-index:1070;">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header-purple d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-chat-left-text-fill me-2"></i>Submit Feedback</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form method="POST" id="feedbackForm">
+                    <input type="hidden" name="sitin_id" id="feedback_sitin_id">
+                    <div class="mb-3">
+                        <label class="field-label">Your Feedback</label>
+                        <textarea name="feedback_message" class="form-control" rows="4"
+                            placeholder="Share your experience about this sit-in session..."
+                            style="border-radius:10px;font-size:0.85rem;resize:none;" required></textarea>
+                    </div>
+                    <div class="d-flex justify-content-end gap-2">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" name="submit_feedback" class="btn btn-purple px-4">
+                            <i class="bi bi-send-fill me-2"></i>Submit Feedback
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- ════ RESERVATION MODAL ════ -->
 <div class="modal fade" id="reservationModal" tabindex="-1" aria-hidden="true">
@@ -1115,6 +1209,23 @@ function confirmLogout(e) {
         }
     });
 }
+
+// ── Feedback modal opener ─────────────────────────────────────────────
+function openFeedbackForm(sitinId) {
+    document.getElementById('feedback_sitin_id').value = sitinId;
+    // Hide history modal first, then show feedback modal
+    bootstrap.Modal.getInstance(document.getElementById('historyModal')).hide();
+    setTimeout(() => {
+        new bootstrap.Modal(document.getElementById('feedbackModal')).show();
+    }, 400);
+}
+
+<?php if (isset($feedback_success) || isset($feedback_error)): ?>
+document.addEventListener('DOMContentLoaded', function() {
+    new bootstrap.Modal(document.getElementById('historyModal')).show();
+});
+<?php endif; ?>
+
 </script>
 </body>
 </html>
