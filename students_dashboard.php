@@ -47,22 +47,31 @@ if (isset($_POST['update_profile'])) {
 if (isset($_POST['submit_reservation'])) {
     $purpose  = $conn->real_escape_string(trim($_POST['res_purpose']));
     $lab      = $conn->real_escape_string(trim($_POST['res_lab']));
-    $timein   = $conn->real_escape_string(trim($_POST['res_timein']));
+    $time_slot = $conn->real_escape_string(trim($_POST['res_time_slot']));
     $date     = $conn->real_escape_string(trim($_POST['res_date']));
-    $seat_num = intval($_POST['res_seat'] ?? 0);
+    $pc_number = intval($_POST['res_pc'] ?? 0);
 
-    $dup = $conn->query("SELECT id FROM sitin_records WHERE id_number='$id_number' AND login_time LIKE '$date%' AND logout_time IS NULL");
-    if ($dup && $dup->num_rows > 0) {
-        $res_error = "You already have an active sit-in on that date.";
+    // Check if PC is available
+    $pc_check = $conn->query("SELECT status FROM pc_status WHERE lab_name = '$lab' AND pc_number = $pc_number");
+    $pc_status = $pc_check->fetch_assoc();
+    
+    if (!$pc_status || $pc_status['status'] !== 'available') {
+        $res_error = "Selected PC is not available.";
     } else {
-        if ($seat_num > 0) {
-            $conn->query("INSERT INTO reservations (id_number, purpose, lab, preferred_time, reservation_date, status, seat_number, created_at)
-                          VALUES ('$id_number','$purpose','$lab','$timein','$date','Pending',$seat_num,NOW())");
+        // Check if time slot is already booked for this PC
+        $slot_check = $conn->query("SELECT id FROM reservations WHERE lab='$lab' AND reservation_date='$date' AND preferred_time='$time_slot' AND seat_number=$pc_number AND status IN ('Pending','Approved')");
+        if ($slot_check && $slot_check->num_rows > 0) {
+            $res_error = "This PC is already booked for the selected time slot.";
         } else {
-            $conn->query("INSERT INTO reservations (id_number, purpose, lab, preferred_time, reservation_date, status, created_at)
-                          VALUES ('$id_number','$purpose','$lab','$timein','$date','Pending',NOW())");
+            $dup = $conn->query("SELECT id FROM sitin_records WHERE id_number='$id_number' AND login_time LIKE '$date%' AND logout_time IS NULL");
+            if ($dup && $dup->num_rows > 0) {
+                $res_error = "You already have an active sit-in on that date.";
+            } else {
+                $conn->query("INSERT INTO reservations (id_number, purpose, lab, preferred_time, reservation_date, status, seat_number, created_at)
+                              VALUES ('$id_number','$purpose','$lab','$time_slot','$date','Pending',$pc_number,NOW())");
+                $res_success = "Reservation submitted! PC #$pc_number reserved for $time_slot.";
+            }
         }
-        $res_success = $seat_num > 0 ? "Reservation submitted! Seat #$seat_num reserved." : "Reservation submitted successfully!";
     }
 }
 
@@ -108,27 +117,22 @@ $res_table_exists = $conn->query("SHOW TABLES LIKE 'reservations'")->num_rows > 
 $reservations = null;
 if ($res_table_exists) {
     $stmt3 = $conn->prepare("SELECT * FROM reservations WHERE id_number = ? ORDER BY reservation_date DESC");
-
-if (!$stmt3) {
-    die("Prepare failed: " . $conn->error);
-}
-
+    if (!$stmt3) {
+        die("Prepare failed: " . $conn->error);
+    }
     $stmt3->bind_param("s", $id_number);
     $stmt3->execute();
     $reservations = $stmt3->get_result();
     $stmt3->close();
 }
 
-// ── Fetch occupied seats per lab/date ────────────────────────────────
-$occupied_seats = [];
+// ── Fetch occupied PCs per lab/date/time ─────────────────────────────
+$occupied_pcs = [];
 if ($res_table_exists) {
-    $col_check = $conn->query("SHOW COLUMNS FROM reservations LIKE 'seat_number'");
-    if ($col_check && $col_check->num_rows > 0) {
-        $oq = $conn->query("SELECT lab, reservation_date, seat_number FROM reservations WHERE status IN ('Pending','Approved') AND seat_number IS NOT NULL AND seat_number > 0");
-        if ($oq) {
-            while ($row = $oq->fetch_assoc()) {
-                $occupied_seats[$row['lab']][$row['reservation_date']][] = intval($row['seat_number']);
-            }
+    $oq = $conn->query("SELECT lab, reservation_date, preferred_time, seat_number FROM reservations WHERE status IN ('Pending','Approved') AND seat_number IS NOT NULL AND seat_number > 0");
+    if ($oq) {
+        while ($row = $oq->fetch_assoc()) {
+            $occupied_pcs[$row['lab']][$row['reservation_date']][$row['preferred_time']][] = intval($row['seat_number']);
         }
     }
 }
@@ -138,7 +142,6 @@ if (isset($_POST['submit_feedback'])) {
     $sitin_id = intval($_POST['sitin_id']);
     $message  = $conn->real_escape_string(trim($_POST['feedback_message']));
     if ($message !== '') {
-        // Check if feedback already exists for this session
         $existing = $conn->query("SELECT id FROM feedback WHERE sitin_id = $sitin_id AND id_number = '$id_number'");
         if ($existing && $existing->num_rows === 0) {
             $conn->query("INSERT INTO feedback (sitin_id, id_number, message, created_at) VALUES ($sitin_id, '$id_number', '$message', NOW())");
@@ -149,8 +152,15 @@ if (isset($_POST['submit_feedback'])) {
     }
 }
 
+// Define time slots
+$time_slots = [
+    '7:00 AM - 9:00 AM',
+    '9:00 AM - 11:00 AM',
+    '11:00 AM - 1:00 PM',
+    '1:00 PM - 3:00 PM',
+    '3:00 PM - 5:00 PM'
+];
 ?>
-
 
 <!DOCTYPE html>
 <html lang="en">
@@ -172,9 +182,26 @@ if (isset($_POST['submit_feedback'])) {
         body { font-family: 'Poppins', sans-serif; background-color: #f4f7f6; margin: 0; overflow-x: hidden; }
 
         /* ── Navbar ── */
-        .navbar { background-color: var(--uc-blue); box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 8px 20px; position: sticky; top: 0; z-index: 100; }
-        .navbar-brand { font-weight: 300; color: white !important; font-size: 0.9rem; letter-spacing: 0.3px; }
-        .nav-action-btn { display: flex; align-items: center; gap: 5px; color: rgba(30,80,120,0.9) !important; font-weight: 600; font-size: 0.78rem; border-radius: 8px; padding: 6px 10px !important; transition: background 0.2s, color 0.2s; text-decoration: none; white-space: nowrap; border: 1.5px solid transparent; }
+        .navbar { 
+            background-color: var(--uc-blue); 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+            padding: 8px 20px; 
+            position: sticky; 
+            top: 0; 
+            z-index: 100; 
+        }
+        .navbar-brand { 
+            font-weight: 300; 
+            color: white !important; 
+            font-size: 0.9rem; 
+            letter-spacing: 0.3px; 
+        }
+        .nav-action-btn { 
+            display: flex; 
+            align-items: center; 
+            gap: 5px; 
+            color: rgba(30,80,120,0.9) !important; 
+            font-weight: 600; font-size: 0.78rem; border-radius: 8px; padding: 6px 10px !important; transition: background 0.2s, color 0.2s; text-decoration: none; white-space: nowrap; border: 1.5px solid transparent; }
         .nav-action-btn i { font-size: 1rem; }
         .nav-action-btn:hover { background: rgba(255,255,255,0.4); color: #1a3e6e !important; border-color: rgba(255,255,255,0.5); }
         .nav-action-btn.purple i { color: var(--ccs-purple); }
@@ -244,16 +271,16 @@ if (isset($_POST['submit_feedback'])) {
 
         footer { padding: 24px 0; text-align: center; color: #bbb; font-size: 0.78rem; }
 
-        /* ════ SEAT PLAN ════ */
-        #seatPlanModal .modal-dialog { max-width: 700px; }
-        #seatPlanModal .modal-content { border-radius: 20px; overflow: hidden; border: none; }
+        /* ════ SEAT PLAN (PC SELECTION) ════ */
+        #pcSelectionModal .modal-dialog { max-width: 800px; }
+        #pcSelectionModal .modal-content { border-radius: 20px; overflow: hidden; border: none; }
 
-        .seat-plan-header {
+        .pc-selection-header {
             background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
             color: white;
             padding: 18px 24px;
         }
-        .seat-plan-header .lab-chip {
+        .pc-selection-header .lab-chip {
             background: rgba(255,215,0,0.2);
             border: 1px solid rgba(255,215,0,0.5);
             color: #FFD700;
@@ -264,7 +291,7 @@ if (isset($_POST['submit_feedback'])) {
             letter-spacing: 0.06em;
         }
 
-        .seat-legend {
+        .pc-legend {
             display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
             padding: 10px 20px;
             background: #f8f9fa;
@@ -273,10 +300,11 @@ if (isset($_POST['submit_feedback'])) {
         }
         .legend-dot { width: 13px; height: 13px; border-radius: 3px; display: inline-block; margin-right: 4px; vertical-align: middle; }
         .legend-available { background: #27ae60; }
-        .legend-occupied  { background: #e74c3c; }
-        .legend-selected  { background: #f39c12; }
+        .legend-occupied { background: #e74c3c; }
+        .legend-maintenance { background: #f39c12; }
+        .legend-selected { background: #9757d6; }
 
-        .seat-room-wrapper { padding: 18px 20px 10px; background: #fff; }
+        .pc-room-wrapper { padding: 18px 20px 10px; background: #fff; }
 
         .front-board {
             background: linear-gradient(90deg, #1a1a2e, #2c3e6b);
@@ -295,119 +323,61 @@ if (isset($_POST['submit_feedback'])) {
         .pc-grid {
             display: grid;
             grid-template-columns: repeat(10, 1fr);
-            gap: 6px;
+            gap: 8px;
         }
 
-        /* Row labels area */
-        .pc-grid-wrapper { position: relative; }
-
-        .pc-seat {
+        .pc-card {
             aspect-ratio: 1;
-            border-radius: 7px;
+            border-radius: 10px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            font-size: 0.58rem;
+            font-size: 0.7rem;
             font-weight: 700;
             cursor: pointer;
             border: 2px solid transparent;
-            transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+            transition: all 0.2s ease;
             position: relative;
-            user-select: none;
+            background: #f0f0f0;
         }
-        .pc-seat i { font-size: 0.9rem; margin-bottom: 1px; }
+        .pc-card i { font-size: 1.1rem; margin-bottom: 4px; }
 
-        .pc-seat.available {
+        .pc-card.available {
             background: linear-gradient(145deg, #d5f5e3, #a9dfbf);
             color: #1a6835;
             border-color: #82c99a;
         }
-        .pc-seat.available:hover {
-            transform: scale(1.12);
-            box-shadow: 0 5px 16px rgba(39,174,96,0.45);
+        .pc-card.available:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 16px rgba(39,174,96,0.3);
             border-color: #27ae60;
-            z-index: 5;
         }
-        .pc-seat.occupied {
+
+        .pc-card.occupied {
             background: linear-gradient(145deg, #fadbd8, #f1948a);
             color: #7b241c;
             border-color: #e57373;
             cursor: not-allowed;
-            opacity: 0.8;
+            opacity: 0.7;
         }
-        .pc-seat.selected {
+
+        .pc-card.maintenance {
             background: linear-gradient(145deg, #fdebd0, #f8c471);
             color: #784212;
             border-color: #f39c12;
-            transform: scale(1.1);
-            box-shadow: 0 5px 16px rgba(243,156,18,0.5);
-            z-index: 5;
+            cursor: not-allowed;
         }
 
-        /* Dropdown popover */
-        .seat-popover {
-            display: none;
-            position: absolute;
-            bottom: calc(100% + 8px);
-            left: 50%;
-            transform: translateX(-50%);
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 10px 32px rgba(0,0,0,0.2);
-            padding: 12px 14px;
-            width: 140px;
-            z-index: 99;
-            text-align: center;
-            border: 2px solid #f39c12;
-            animation: popIn 0.15s ease;
+        .pc-card.selected {
+            background: linear-gradient(145deg, var(--ccs-purple), #7c45b8);
+            color: white;
+            border-color: var(--ccs-gold);
+            transform: scale(1.05);
+            box-shadow: 0 5px 16px rgba(151,87,214,0.5);
         }
-        @keyframes popIn {
-            from { opacity: 0; transform: translateX(-50%) scale(0.85); }
-            to   { opacity: 1; transform: translateX(-50%) scale(1); }
-        }
-        .seat-popover::after {
-            content: '';
-            position: absolute;
-            top: 100%; left: 50%;
-            transform: translateX(-50%);
-            border-left: 8px solid transparent;
-            border-right: 8px solid transparent;
-            border-top: 8px solid #f39c12;
-        }
-        .seat-popover .pop-title { font-size: 0.73rem; font-weight: 800; color: #333; margin-bottom: 8px; }
-        .seat-popover .pop-title i { color: var(--ccs-purple); margin-right: 3px; }
-        .pop-btn-sit {
-            width: 100%; background: linear-gradient(135deg, #27ae60, #1e8449);
-            color: white; border: none; border-radius: 7px;
-            font-size: 0.72rem; font-weight: 700; padding: 6px;
-            cursor: pointer; transition: opacity 0.2s; margin-bottom: 4px;
-        }
-        .pop-btn-sit:hover { opacity: 0.85; }
-        .pop-btn-cancel {
-            width: 100%; background: #f5f5f5; color: #888;
-            border: none; border-radius: 7px;
-            font-size: 0.68rem; padding: 4px;
-            cursor: pointer; transition: background 0.2s;
-        }
-        .pop-btn-cancel:hover { background: #eee; }
 
-        /* Selected seat info bar */
-        .selected-seat-bar {
-            display: none;
-            background: linear-gradient(135deg, #fef9e7, #fdebd0);
-            border-top: 2px solid #f39c12;
-            padding: 10px 20px;
-            font-size: 0.83rem;
-            font-weight: 600;
-            color: #784212;
-            align-items: center;
-            gap: 10px;
-        }
-        .selected-seat-bar.show { display: flex; }
-        .selected-seat-bar i { font-size: 1.1rem; color: #f39c12; }
-
-        .seat-plan-footer {
+        .pc-selection-footer {
             padding: 12px 20px 16px;
             background: #fafafa;
             border-top: 1px solid #f0f0f0;
@@ -416,35 +386,73 @@ if (isset($_POST['submit_feedback'])) {
             align-items: center;
             gap: 10px;
         }
-        .avail-counter { font-size: 0.75rem; color: #888; }
-        .avail-counter strong { color: #27ae60; }
 
-        /* Seat display in form */
-        .seat-chosen-box {
+        .selected-pc-display {
             background: linear-gradient(135deg, #f3e9fd, #e8f0fe);
             border: 2px solid var(--ccs-purple);
             border-radius: 10px;
-            padding: 9px 14px;
-            font-size: 0.83rem;
+            padding: 10px 15px;
+            font-size: 0.85rem;
             font-weight: 700;
             color: var(--ccs-purple);
-            display: none;
+            display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
         }
-        .seat-chosen-box.show { display: flex; }
-        .seat-chosen-box .change-btn {
-            margin-left: auto;
-            background: var(--ccs-purple);
-            color: white; border: none; border-radius: 6px;
-            font-size: 0.7rem; padding: 3px 10px; cursor: pointer;
-        }
+        .selected-pc-display i { font-size: 1.1rem; }
 
-        .lab-hint {
-            font-size: 0.72rem; color: var(--ccs-purple);
-            margin-top: 3px; display: none;
+        /* Time slot styles */
+        .time-slot-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 5px;
         }
-        .lab-hint.show { display: block; }
+        .time-slot-option {
+            flex: 1;
+            min-width: 120px;
+        }
+        .time-slot-option input[type="radio"] {
+            display: none;
+        }
+        .time-slot-option label {
+            display: block;
+            padding: 10px 12px;
+            background: #f8f9fa;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #666;
+        }
+        .time-slot-option input[type="radio"]:checked + label {
+            background: linear-gradient(135deg, var(--ccs-purple), #7c45b8);
+            border-color: var(--ccs-gold);
+            color: white;
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(151,87,214,0.3);
+        }
+        .time-slot-option label:hover {
+            border-color: var(--ccs-purple);
+            background: #f3e9fd;
+        }
+                /* PC Alert Styles */
+        #pcAlertArea .alert-warning {
+            background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+            border: none;
+            color: #e65100;
+        }
+        #pcAlertArea .alert-success {
+            background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+            border: none;
+            color: #2e7d32;
+        }
+        .text-purple {
+            color: var(--ccs-purple);
+        }
     </style>
 </head>
 <body>
@@ -583,6 +591,86 @@ if (isset($_POST['submit_feedback'])) {
     </div>
 </div>
 
+<!-- PC Status Notification -->
+<div class="dash-card">
+    <div class="card-header-purple">
+        <i class="bi bi-info-circle-fill me-2"></i>PC Availability Alerts
+    </div>
+    <div class="card-body p-3">
+        <div id="pcAlertArea">
+            <?php
+            // Get recent PC status changes from the last 7 days
+            $recent_changes = $conn->query("
+                SELECT * FROM pc_status_history 
+                WHERE changed_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
+                AND new_status IN ('maintenance', 'not_available')
+                ORDER BY changed_at DESC 
+                LIMIT 10
+            ");
+            if ($recent_changes && $recent_changes->num_rows > 0):
+            ?>
+            <div class="alert alert-warning mb-3" style="border-radius:12px;">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                <strong>PC Maintenance Alerts</strong>
+                <hr class="my-2">
+                <?php while ($alert = $recent_changes->fetch_assoc()): ?>
+                <div class="small mb-2">
+                    <i class="bi bi-pc-display me-1"></i> 
+                    <span class="fw-bold">Lab <?= htmlspecialchars($alert['lab_name']) ?>, PC #<?= $alert['pc_number'] ?></span> 
+                    is now 
+                    <span class="badge bg-danger"><?= ucfirst(str_replace('_', ' ', $alert['new_status'])) ?></span>
+                    <br>
+                    <small class="text-muted">Updated: <?= date('M d, H:i', strtotime($alert['changed_at'])) ?></small>
+                    <?php if ($alert['notes']): ?>
+                    <div class="text-muted mt-1" style="font-size:0.7rem;">Note: <?= htmlspecialchars($alert['notes']) ?></div>
+                    <?php endif; ?>
+                </div>
+                <?php endwhile; ?>
+            </div>
+            <?php else: ?>
+            <div class="alert alert-success mb-0" style="border-radius:12px;">
+                <i class="bi bi-check-circle-fill me-2"></i>
+                All PCs are currently available. No maintenance alerts at this time.
+            </div>
+            <?php endif; ?>
+            
+            <!-- Display PCs that are currently unavailable -->
+            <?php
+            $unavailable_pcs = $conn->query("
+                SELECT lab_name, pc_number, status, notes 
+                FROM pc_status 
+                WHERE status IN ('maintenance', 'not_available', 'in_use')
+                ORDER BY lab_name, pc_number
+                LIMIT 20
+            ");
+            if ($unavailable_pcs && $unavailable_pcs->num_rows > 0):
+            ?>
+            <div class="mt-3">
+                <small class="text-muted fw-bold">Currently Unavailable PCs:</small>
+                <div class="row mt-2">
+                    <?php 
+                    $current_lab = '';
+                    while ($pc = $unavailable_pcs->fetch_assoc()):
+                        if ($current_lab != $pc['lab_name']):
+                            if ($current_lab != '') echo '</div>';
+                            $current_lab = $pc['lab_name'];
+                    ?>
+                    <div class="col-12 mb-2">
+                        <strong class="text-purple">Lab <?= htmlspecialchars($pc['lab_name']) ?>:</strong>
+                        <div class="d-flex flex-wrap gap-1 mt-1">
+                    <?php endif; ?>
+                            <span class="badge bg-danger mb-1">PC #<?= $pc['pc_number'] ?></span>
+                    <?php 
+                    endwhile;
+                    if ($current_lab != '') echo '</div></div>';
+                    ?>
+                </div>
+            </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
 <footer>&copy; <?= date('Y') ?> University of Cebu &mdash; College of Computer Studies | CCS Sit-in Monitoring System</footer>
 
 
@@ -704,6 +792,7 @@ if (isset($_POST['submit_feedback'])) {
                                 <th>Login Time</th>
                                 <th>Purpose</th>
                                 <th>Lab</th>
+                                <th>PC #</th>
                                 <th>Logout Time</th>
                                 <th>Status</th>
                                 <th>Feedback</th>
@@ -712,7 +801,6 @@ if (isset($_POST['submit_feedback'])) {
                         <tbody>
                         <?php
                         $sessions->data_seek(0);
-                        // Fetch all existing feedback for this student
                         $fb_map = [];
                         $fb_res = $conn->query("SELECT sitin_id, message FROM feedback WHERE id_number = '$id_number'");
                         if ($fb_res) while ($fb = $fb_res->fetch_assoc()) $fb_map[$fb['sitin_id']] = $fb['message'];
@@ -726,6 +814,7 @@ if (isset($_POST['submit_feedback'])) {
                                 <td><?= htmlspecialchars($s['login_time']) ?></td>
                                 <td><?= htmlspecialchars($s['purpose']) ?></td>
                                 <td><?= htmlspecialchars($s['lab']) ?></td>
+                                <td><?= $s['pc_number'] ? '#' . $s['pc_number'] : '—' ?></td>
                                 <td><?= $is_active ? '<span class="text-muted">—</span>' : htmlspecialchars($s['logout_time']) ?></td>
                                 <td><?= $is_active ? '<span class="badge-active">Active</span>' : '<span class="badge-done">Done</span>' ?></td>
                                 <td>
@@ -748,9 +837,9 @@ if (isset($_POST['submit_feedback'])) {
                                 </td>
                             </tr>
                         <?php endwhile; else: ?>
-                            <tr><td colspan="6" class="text-center text-muted py-3">
+                            <tr><td colspan="7" class="text-center text-muted py-3">
                                 <i class="bi bi-inbox me-2"></i>No sit-in history found.
-                            </td></tr>
+                            </td><tr>
                         <?php endif; ?>
                         </tbody>
                     </table>
@@ -829,37 +918,40 @@ if (isset($_POST['submit_feedback'])) {
                                 <label class="field-label">Lab</label>
                                 <select name="res_lab" id="res_lab" class="form-select" required>
                                     <option value="">-- Select Lab --</option>
-                                    <option>524</option>
-                                    <option>526</option>
-                                    <option>528</option>
-                                    <option>530</option>
-                                    <option>544</option>
-                                    <option>Mac Lab</option>
+                                    <?php
+                                    $lab_list = $conn->query("SELECT lab_name FROM lab_config ORDER BY lab_name");
+                                    while ($lab = $lab_list->fetch_assoc()):
+                                    ?>
+                                    <option value="<?= $lab['lab_name'] ?>">Lab <?= $lab['lab_name'] ?></option>
+                                    <?php endwhile; ?>
                                 </select>
-                                <div class="lab-hint" id="labHint">
-                                    <i class="bi bi-arrow-up-circle-fill me-1"></i>Lab selected — view seat plan above
-                                </div>
                             </div>
                             <div class="col-sm-6">
-                                <label class="field-label">Preferred Time</label>
-                                <input type="time" name="res_timein" class="form-control" required>
+                                <label class="field-label">Preferred Time Slot</label>
+                                <div class="time-slot-group" id="timeSlotGroup">
+                                    <?php foreach ($time_slots as $slot): ?>
+                                    <div class="time-slot-option">
+                                        <input type="radio" name="res_time_slot" value="<?= $slot ?>" id="slot_<?= preg_replace('/[^a-zA-Z0-9]/', '_', $slot) ?>" required>
+                                        <label for="slot_<?= preg_replace('/[^a-zA-Z0-9]/', '_', $slot) ?>"><?= $slot ?></label>
+                                    </div>
+                                    <?php endforeach; ?>
+                                </div>
                             </div>
                             <div class="col-sm-6">
                                 <label class="field-label">Date</label>
                                 <input type="date" name="res_date" id="res_date" class="form-control" min="<?= date('Y-m-d') ?>" required>
                             </div>
 
-                            <!-- Selected Seat display -->
-                            <div class="col-12" id="seatDisplayCol">
-                                <label class="field-label">Selected Seat</label>
-                                <div class="seat-chosen-box" id="seatChosenBox">
+                            <!-- Selected PC display -->
+                            <div class="col-12" id="pcDisplayCol">
+                                <label class="field-label">Select PC</label>
+                                <div class="selected-pc-display" id="selectedPcDisplay" onclick="openPCSelectionModal()" style="cursor: pointer;">
                                     <i class="bi bi-pc-display-horizontal"></i>
-                                    <span id="seatChosenText">No seat selected</span>
-                                    <button type="button" class="change-btn" onclick="openSeatPlan()">Change Seat</button>
+                                    <span id="selectedPcText">Click to select a PC (1-50)</span>
                                 </div>
-                                <input type="hidden" name="res_seat" id="res_seat_input" value="">
-                                <div id="seatRequiredNote" style="font-size:0.73rem;color:#e74c3c;margin-top:4px;display:none;">
-                                    <i class="bi bi-exclamation-circle me-1"></i>Please select a seat from the seat plan.
+                                <input type="hidden" name="res_pc" id="res_pc_input" value="">
+                                <div id="pcRequiredNote" style="font-size:0.73rem;color:#e74c3c;margin-top:4px;display:none;">
+                                    <i class="bi bi-exclamation-circle me-1"></i>Please select a PC (1-50).
                                 </div>
                             </div>
                         </div>
@@ -877,7 +969,7 @@ if (isset($_POST['submit_feedback'])) {
                 </div>
                 <div class="table-responsive">
                     <table class="table table-hover mb-0" style="font-size:0.82rem;">
-                        <thead><tr><th>Date</th><th>Purpose</th><th>Lab</th><th>Time</th><th>Seat</th><th>Status</th><th>Action</th></tr></thead>
+                        <thead><tr><th>Date</th><th>Purpose</th><th>Lab</th><th>Time Slot</th><th>PC #</th><th>Status</th><th>Action</th></tr></thead>
                         <tbody>
                         <?php if ($res_table_exists && $reservations && $reservations->num_rows > 0):
                             while ($r = $reservations->fetch_assoc()):
@@ -892,7 +984,7 @@ if (isset($_POST['submit_feedback'])) {
                                 <td><?= htmlspecialchars($r['purpose']) ?></td>
                                 <td><?= htmlspecialchars($r['lab']) ?></td>
                                 <td><?= htmlspecialchars($r['preferred_time']) ?></td>
-                                <td><?= !empty($r['seat_number']) ? '<span style="font-weight:700;color:var(--ccs-purple);">#'.intval($r['seat_number']).'</span>' : '<span class="text-muted">—</span>' ?></td>
+                                <td><?= !empty($r['seat_number']) ? '<span style="font-weight:700;color:var(--ccs-purple);">#' . intval($r['seat_number']) . '</span>' : '<span class="text-muted">—</span>' ?></td>
                                 <td><span class="<?= $rbadge ?>"><?= htmlspecialchars($r['status']) ?></span></td>
                                 <td>
                                     <?php if (strtolower($r['status']) === 'pending'): ?>
@@ -915,63 +1007,46 @@ if (isset($_POST['submit_feedback'])) {
 </div>
 
 
-<!-- ════ SEAT PLAN MODAL ════ -->
-<div class="modal fade" id="seatPlanModal" tabindex="-1" aria-hidden="true" style="z-index:1065;">
-    <div class="modal-dialog modal-dialog-centered" style="max-width:700px;">
+<!-- ════ PC SELECTION MODAL (50 PCs Grid) ════ -->
+<div class="modal fade" id="pcSelectionModal" tabindex="-1" aria-hidden="true" style="z-index:1065;">
+    <div class="modal-dialog modal-dialog-centered" style="max-width: 800px;">
         <div class="modal-content" style="border-radius:20px;overflow:hidden;border:none;">
-
-            <!-- Header -->
-            <div class="seat-plan-header d-flex justify-content-between align-items-center">
+            <div class="pc-selection-header d-flex justify-content-between align-items-center">
                 <div>
                     <div style="font-weight:800;font-size:1.05rem;letter-spacing:0.01em;">
-                        <i class="bi bi-pc-display me-2" style="color:#a1cbf7;"></i>Computer Lab Seat Plan
+                        <i class="bi bi-pc-display me-2" style="color:#a1cbf7;"></i>Select Your PC - Lab <span id="pcModalLabLabel">—</span>
                     </div>
-                    <div style="font-size:0.75rem;opacity:0.6;margin-top:3px;">Click an available (green) seat to select it</div>
+                    <div style="font-size:0.75rem;opacity:0.6;margin-top:3px;">Click on any available PC to select it</div>
                 </div>
-                <div class="d-flex align-items-center gap-2">
-                    <span class="lab-chip" id="seatPlanLabLabel">Lab —</span>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
 
-            <!-- Legend -->
-            <div class="seat-legend">
+            <div class="pc-legend">
                 <div><span class="legend-dot legend-available"></span>Available</div>
-                <div><span class="legend-dot legend-occupied"></span>Occupied / Reserved</div>
-                <div><span class="legend-dot legend-selected"></span>Your Pick</div>
-                <div class="ms-auto" style="font-size:0.75rem;color:#27ae60;font-weight:700;">
-                    <i class="bi bi-pc-display me-1"></i><span id="availableCount">50</span> available
-                </div>
+                <div><span class="legend-dot legend-occupied"></span>Booked/In Use</div>
+                <div><span class="legend-dot legend-maintenance"></span>Maintenance</div>
+                <div><span class="legend-dot legend-selected"></span>Your Selection</div>
             </div>
 
-            <!-- Room layout -->
-            <div class="seat-room-wrapper">
+            <div class="pc-room-wrapper">
                 <div class="front-board">
-                    <i class="bi bi-easel me-2"></i>INSTRUCTOR'S STATION &nbsp;·&nbsp; FRONT OF ROOM
+                    <i class="bi bi-easel me-2"></i> COMPUTER LAB (PCs 1-50)
                 </div>
-                <div class="pc-grid" id="pcGrid"><!-- JS generated --></div>
-            </div>
-
-            <!-- Selected bar -->
-            <div class="selected-seat-bar" id="selectedSeatBar">
-                <i class="bi bi-check-circle-fill"></i>
-                <div>
-                    <div id="selectedSeatBarText" style="font-weight:800;">PC #— selected</div>
-                    <div style="font-size:0.7rem;color:#a04000;font-weight:500;">Click "Confirm Seat" to save your choice</div>
+                <div class="pc-grid" id="pcSelectionGrid">
+                    <!-- JS will generate 50 PCs here -->
                 </div>
             </div>
 
-            <!-- Footer -->
-            <div class="seat-plan-footer">
+            <div class="pc-selection-footer">
                 <div class="avail-counter">
-                    Total PCs: 50 &nbsp;|&nbsp; Available: <strong id="availableCount2">—</strong>
+                    Total PCs: 50 &nbsp;|&nbsp; Available: <strong id="availablePcCount">—</strong>
                 </div>
                 <div class="d-flex gap-2">
                     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
-                        <i class="bi bi-arrow-left me-1"></i>Back
+                        <i class="bi bi-arrow-left me-1"></i>Cancel
                     </button>
-                    <button type="button" class="btn btn-purple px-4" id="confirmSeatBtn" disabled onclick="confirmSeatSelection()">
-                        <i class="bi bi-check2-circle me-2"></i>Confirm Seat
+                    <button type="button" class="btn btn-purple px-4" id="confirmPcBtn" disabled onclick="confirmPCSelection()">
+                        <i class="bi bi-check2-circle me-2"></i>Confirm PC Selection
                     </button>
                 </div>
             </div>
@@ -984,8 +1059,7 @@ if (isset($_POST['submit_feedback'])) {
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
-
-// ── PHP data for PC status ──────────────────────────────────────────
+// PC Status Data from PHP
 const pcStatusData = <?php 
     $pc_data = [];
     $labs = $conn->query("SELECT lab_name FROM lab_config");
@@ -1000,388 +1074,193 @@ const pcStatusData = <?php
     echo json_encode($pc_data);
 ?>;
 
-let currentReservationLab = '';
-let currentReservationDate = '';
-let selectedReservationSeat = null;
+// Occupied PCs from reservations
+const occupiedPCs = <?= json_encode($occupied_pcs) ?>;
 
-// Override the openSeatPlan function to use real PC status
-function openSeatPlan() {
+let currentSelectedPC = null;
+let pcSelectionModal = null;
+
+function openPCSelectionModal() {
     const lab = document.getElementById('res_lab').value;
     const date = document.getElementById('res_date').value;
-
+    const timeSlot = document.querySelector('input[name="res_time_slot"]:checked');
+    
     if (!lab) {
-        Swal.fire({ icon: 'warning', title: 'Select a lab first', text: 'Please choose a laboratory before picking a seat.', confirmButtonColor: '#9757d6' });
+        Swal.fire({ icon: 'warning', title: 'Select Lab First', text: 'Please select a laboratory first.', confirmButtonColor: '#9757d6' });
         return;
     }
-
-    currentReservationLab = lab;
-    currentReservationDate = date;
-    document.getElementById('seatPlanLabLabel').textContent = 'Lab ' + lab;
-    buildRealSeatGrid(lab, date);
     
-    if (!seatModal) {
-        seatModal = new bootstrap.Modal(document.getElementById('seatPlanModal'), { backdrop: 'static' });
+    if (!date) {
+        Swal.fire({ icon: 'warning', title: 'Select Date', text: 'Please select a reservation date first.', confirmButtonColor: '#9757d6' });
+        return;
     }
-    seatModal.show();
+    
+    if (!timeSlot) {
+        Swal.fire({ icon: 'warning', title: 'Select Time Slot', text: 'Please select a preferred time slot first.', confirmButtonColor: '#9757d6' });
+        return;
+    }
+    
+    document.getElementById('pcModalLabLabel').textContent = lab;
+    buildPCGrid(lab, date, timeSlot.value);
+    
+    if (!pcSelectionModal) {
+        pcSelectionModal = new bootstrap.Modal(document.getElementById('pcSelectionModal'));
+    }
+    pcSelectionModal.show();
 }
 
-function buildRealSeatGrid(lab, date) {
-    const grid = document.getElementById('pcGrid');
-    
-    // Get occupied seats from reservations for this lab/date
-    let occupiedReservations = [];
-    <?php
-    $res_seats = $conn->query("SELECT lab, reservation_date, seat_number FROM reservations WHERE status IN ('Pending', 'Approved') AND seat_number IS NOT NULL");
-    $res_seat_map = [];
-    while ($rs = $res_seat_map->fetch_assoc()) {
-        $res_seat_map[$rs['lab']][$rs['reservation_date']][] = $rs['seat_number'];
-    }
-    ?>
-    const reservationOccupied = <?= json_encode($res_seat_map) ?>;
-    
-    // Get PC status from database
+function buildPCGrid(lab, date, timeSlot) {
+    const grid = document.getElementById('pcSelectionGrid');
     const labPCs = pcStatusData[lab] || {};
-    
-    // Get total PCs for this lab
-    let totalPCs = 50;
-    <?php
-    $lab_totals = $conn->query("SELECT lab_name, total_pcs FROM lab_config");
-    $lab_total_map = [];
-    while ($lt = $lab_totals->fetch_assoc()) {
-        $lab_total_map[$lt['lab_name']] = $lt['total_pcs'];
-    }
-    ?>
-    const labTotals = <?= json_encode($lab_total_map) ?>;
-    if (labTotals[lab]) totalPCs = labTotals[lab];
-    
-    const occupiedByReservation = (reservationOccupied[lab] && reservationOccupied[lab][date]) ? reservationOccupied[lab][date] : [];
+    const occupiedForSlot = (occupiedPCs[lab] && occupiedPCs[lab][date] && occupiedPCs[lab][date][timeSlot]) 
+        ? occupiedPCs[lab][date][timeSlot] : [];
     
     grid.innerHTML = '';
-    let availCount = 0;
+    let availableCount = 0;
     
-    for (let i = 1; i <= totalPCs; i++) {
+    for (let i = 1; i <= 50; i++) {
         const pcStatus = labPCs[i] || 'available';
-        const isReserved = occupiedByReservation.includes(i);
-        const isOccupied = (pcStatus !== 'available') || isReserved;
-        const isSelected = (selectedReservationSeat === i);
+        const isOccupied = occupiedForSlot.includes(i);
+        const isSelected = (currentSelectedPC === i);
         
-        let statusText = '';
         let statusClass = '';
+        let statusText = '';
+        let isSelectable = false;
         
         if (isSelected) {
             statusClass = 'selected';
             statusText = 'Selected';
-        } else if (isReserved) {
+            isSelectable = true;
+        } else if (isOccupied) {
             statusClass = 'occupied';
-            statusText = 'Reserved';
+            statusText = 'Booked';
+            isSelectable = false;
         } else if (pcStatus === 'maintenance') {
             statusClass = 'maintenance';
             statusText = 'Maintenance';
-        } else if (pcStatus === 'offline') {
-            statusClass = 'offline';
-            statusText = 'Offline';
+            isSelectable = false;
         } else if (pcStatus === 'in_use') {
             statusClass = 'occupied';
             statusText = 'In Use';
+            isSelectable = false;
+        } else if (pcStatus === 'not_available') {
+            statusClass = 'occupied';
+            statusText = 'Not Available';
+            isSelectable = false;
         } else {
             statusClass = 'available';
             statusText = 'Available';
-            if (!isOccupied) availCount++;
+            isSelectable = true;
+            availableCount++;
         }
         
-        const isSelectable = !isOccupied && pcStatus === 'available' && !isReserved;
-        
-        const div = document.createElement('div');
-        div.className = 'pc-seat ' + statusClass;
-        div.dataset.num = i;
-        div.title = `PC #${i} — ${statusText}`;
-        
-        div.innerHTML = `
+        const pcCard = document.createElement('div');
+        pcCard.className = `pc-card ${statusClass}`;
+        pcCard.innerHTML = `
             <i class="bi bi-pc-display-horizontal"></i>
             <span>${i}</span>
-            ${isSelectable ? `
-            <div class="seat-popover" id="pop_${i}" onclick="event.stopPropagation()">
-                <div class="pop-title"><i class="bi bi-pc-display-horizontal"></i>PC #${i}</div>
-                <button class="pop-btn-sit" onclick="selectThisSeat(${i})">
-                    <i class="bi bi-cursor-fill me-1"></i>Reserve This PC
-                </button>
-                <button class="pop-btn-cancel" onclick="closePop(${i}); event.stopPropagation()">✕ Cancel</button>
-            </div>` : ''}
+            <small style="font-size:0.6rem;">${statusText}</small>
         `;
         
-        if (isSelectable) {
-            div.addEventListener('click', function(e) {
-                e.stopPropagation();
-                togglePop(i);
-            });
+        if (isSelectable && !isSelected) {
+            pcCard.style.cursor = 'pointer';
+            pcCard.onclick = (function(pcNum) {
+                return function() { selectPC(pcNum); };
+            })(i);
         }
         
-        grid.appendChild(div);
+        grid.appendChild(pcCard);
     }
     
-    document.getElementById('availableCount').textContent = availCount;
-    document.getElementById('availableCount2').textContent = availCount;
+    document.getElementById('availablePcCount').textContent = availableCount;
 }
 
-function selectThisSeat(num) {
-    selectedReservationSeat = num;
-    closePop(num);
+function selectPC(pcNumber) {
+    currentSelectedPC = pcNumber;
     
-    document.querySelectorAll('.pc-seat').forEach(s => {
-        s.classList.remove('selected');
-        if (parseInt(s.dataset.num) === num) s.classList.add('selected');
+    // Update the grid to highlight the selected PC
+    const lab = document.getElementById('res_lab').value;
+    const date = document.getElementById('res_date').value;
+    const timeSlot = document.querySelector('input[name="res_time_slot"]:checked').value;
+    buildPCGrid(lab, date, timeSlot);
+    
+    // Enable the confirm button
+    document.getElementById('confirmPcBtn').disabled = false;
+    
+    // Show success message
+    Swal.fire({
+        title: 'PC #' + pcNumber + ' Selected',
+        text: 'Click "Confirm PC Selection" to proceed.',
+        icon: 'success',
+        timer: 1500,
+        showConfirmButton: false
     });
-    
-    const bar = document.getElementById('selectedSeatBar');
-    bar.classList.add('show');
-    document.getElementById('selectedSeatBarText').textContent = 'PC #' + num + ' selected';
-    document.getElementById('confirmSeatBtn').disabled = false;
 }
 
-function confirmSeatSelection() {
-    if (!selectedReservationSeat) return;
-    
-    document.getElementById('res_seat_input').value = selectedReservationSeat;
-    const box = document.getElementById('seatChosenBox');
-    box.classList.add('show');
-    document.getElementById('seatChosenText').textContent = 'PC #' + selectedReservationSeat + '  —  Lab ' + currentReservationLab;
-    
-    const hint = document.getElementById('labHint');
-    hint.classList.remove('show');
-    document.getElementById('seatRequiredNote').style.display = 'none';
-    
-    bootstrap.Modal.getInstance(document.getElementById('seatPlanModal')).hide();
-}
-
-function resetSeatSelection() {
-    selectedReservationSeat = null;
-    document.getElementById('res_seat_input').value = '';
-    document.getElementById('seatChosenBox').classList.remove('show');
-    document.getElementById('seatRequiredNote').style.display = 'none';
-    
-    const bar = document.getElementById('selectedSeatBar');
-    if (bar) bar.classList.remove('show');
-    
-    const btn = document.getElementById('confirmSeatBtn');
-    if (btn) btn.disabled = true;
-}
-
-function togglePop(num) {
-    document.querySelectorAll('.seat-popover').forEach(p => {
-        if (p.id !== 'pop_' + num) p.style.display = 'none';
-    });
-    const pop = document.getElementById('pop_' + num);
-    if (pop) pop.style.display = (pop.style.display === 'block') ? 'none' : 'block';
-}
-
-function closePop(num) {
-    const pop = document.getElementById('pop_' + num);
-    if (pop) pop.style.display = 'none';
-}
-
-// Close popovers on outside click
-document.addEventListener('click', function(e) {
-    if (!e.target.closest('.pc-seat')) {
-        document.querySelectorAll('.seat-popover').forEach(p => p.style.display = 'none');
+function confirmPCSelection() {
+    if (currentSelectedPC) {
+        document.getElementById('res_pc_input').value = currentSelectedPC;
+        document.getElementById('selectedPcText').innerHTML = `<strong>PC #${currentSelectedPC}</strong>`;
+        document.getElementById('selectedPcDisplay').style.borderColor = '#27ae60';
+        document.getElementById('pcRequiredNote').style.display = 'none';
+        
+        pcSelectionModal.hide();
+        
+        Swal.fire({
+            title: 'PC Selected!',
+            text: `PC #${currentSelectedPC} has been reserved for your selected time slot.`,
+            icon: 'success',
+            confirmButtonColor: '#9757d6'
+        });
     }
+}
+
+// Reset PC selection when lab, date, or time slot changes
+function resetPCSelection() {
+    currentSelectedPC = null;
+    document.getElementById('res_pc_input').value = '';
+    document.getElementById('selectedPcText').innerHTML = 'Click to select a PC (1-50)';
+    document.getElementById('selectedPcDisplay').style.borderColor = '';
+    document.getElementById('confirmPcBtn').disabled = true;
+}
+
+// Event listeners to reset PC selection
+document.getElementById('res_lab').addEventListener('change', resetPCSelection);
+document.getElementById('res_date').addEventListener('change', resetPCSelection);
+document.querySelectorAll('input[name="res_time_slot"]').forEach(radio => {
+    radio.addEventListener('change', resetPCSelection);
 });
 
-// Update reservation form validation
+// Form validation
 document.getElementById('reservationForm').addEventListener('submit', function(e) {
     const lab = document.getElementById('res_lab').value;
-    const seat = document.getElementById('res_seat_input').value;
-    if (lab && !seat) {
-        e.preventDefault();
-        document.getElementById('seatRequiredNote').style.display = 'block';
-        openSeatPlan();
-    }
-});
-// ── PHP data ──────────────────────────────────────────────────────────
-const occupiedData = <?= json_encode($occupied_seats) ?>;
-
-let currentLab   = '';
-let currentDate  = '';
-let selectedSeat = null;
-let seatModal    = null;
-
-// ── Lab change: open seat plan immediately ────────────────────────────
-document.getElementById('res_lab').addEventListener('change', function () {
-    const lab  = this.value;
     const date = document.getElementById('res_date').value;
-
-    // Reset previous seat if lab changes
-    resetSeatSelection();
-
-    if (lab) {
-        currentLab  = lab;
-        currentDate = date;
-        document.getElementById('labHint').classList.add('show');
-        openSeatPlan();
-    } else {
-        document.getElementById('labHint').classList.remove('show');
-    }
-});
-
-// Date change: warn user to re-pick seat
-document.getElementById('res_date').addEventListener('change', function () {
-    currentDate = this.value;
-    if (selectedSeat) {
-        resetSeatSelection();
-        const hint = document.getElementById('labHint');
-        hint.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1" style="color:#e74c3c;"></i>Date changed — please re-select your seat.';
-        hint.classList.add('show');
-    }
-});
-
-// ── Open seat plan modal ──────────────────────────────────────────────
-function openSeatPlan() {
-    const lab  = document.getElementById('res_lab').value;
-    const date = document.getElementById('res_date').value;
-
+    const timeSlot = document.querySelector('input[name="res_time_slot"]:checked');
+    const pc = document.getElementById('res_pc_input').value;
+    
     if (!lab) {
-        Swal.fire({ icon: 'warning', title: 'Select a lab first', text: 'Please choose a laboratory before picking a seat.', confirmButtonColor: '#9757d6' });
+        e.preventDefault();
+        Swal.fire({ icon: 'warning', title: 'Missing Information', text: 'Please select a laboratory.', confirmButtonColor: '#9757d6' });
         return;
     }
-
-    currentLab  = lab;
-    currentDate = date;
-
-    document.getElementById('seatPlanLabLabel').textContent = 'Lab ' + lab;
-    buildSeatGrid(lab, date);
-
-    if (!seatModal) {
-        seatModal = new bootstrap.Modal(document.getElementById('seatPlanModal'), { backdrop: 'static' });
-    }
-    seatModal.show();
-}
-
-// ── Build 50-seat grid ────────────────────────────────────────────────
-function buildSeatGrid(lab, date) {
-    const grid     = document.getElementById('pcGrid');
-    const occupied = (occupiedData[lab] && occupiedData[lab][date]) ? occupiedData[lab][date] : [];
-    grid.innerHTML = '';
-
-    let availCount = 0;
-
-    for (let i = 1; i <= 50; i++) {
-        const isOccupied = occupied.includes(i);
-        const isSelected = (selectedSeat === i);
-        if (!isOccupied) availCount++;
-
-        const div = document.createElement('div');
-        div.className = 'pc-seat ' + (isSelected ? 'selected' : (isOccupied ? 'occupied' : 'available'));
-        div.dataset.num = i;
-        div.title = isOccupied ? 'PC #' + i + ' — Occupied' : 'PC #' + i + ' — Available';
-
-        div.innerHTML = `
-            <i class="bi bi-pc-display-horizontal"></i>
-            <span>${i}</span>
-            ${!isOccupied ? `
-            <div class="seat-popover" id="pop_${i}" onclick="event.stopPropagation()">
-                <div class="pop-title"><i class="bi bi-pc-display-horizontal"></i>PC #${i}</div>
-                <button class="pop-btn-sit" onclick="selectThisSeat(${i})">
-                    <i class="bi bi-cursor-fill me-1"></i>Sit Here
-                </button>
-                <button class="pop-btn-cancel" onclick="closePop(${i}); event.stopPropagation()">✕ Cancel</button>
-            </div>` : ''}
-        `;
-
-        if (!isOccupied) {
-            div.addEventListener('click', function(e) {
-                e.stopPropagation();
-                togglePop(i);
-            });
-        }
-
-        grid.appendChild(div);
-    }
-
-    document.getElementById('availableCount').textContent  = availCount;
-    document.getElementById('availableCount2').textContent = availCount;
-}
-
-// ── Popover toggle/close ──────────────────────────────────────────────
-function togglePop(num) {
-    document.querySelectorAll('.seat-popover').forEach(p => {
-        if (p.id !== 'pop_' + num) p.style.display = 'none';
-    });
-    const pop = document.getElementById('pop_' + num);
-    if (pop) pop.style.display = (pop.style.display === 'block') ? 'none' : 'block';
-}
-function closePop(num) {
-    const pop = document.getElementById('pop_' + num);
-    if (pop) pop.style.display = 'none';
-}
-
-// Close popovers on outside click
-document.addEventListener('click', function(e) {
-    if (!e.target.closest('.pc-seat')) {
-        document.querySelectorAll('.seat-popover').forEach(p => p.style.display = 'none');
-    }
-});
-
-// ── Select a seat ─────────────────────────────────────────────────────
-function selectThisSeat(num) {
-    selectedSeat = num;
-    closePop(num);
-
-    // Update grid highlights
-    document.querySelectorAll('.pc-seat').forEach(s => {
-        s.classList.remove('selected');
-        if (parseInt(s.dataset.num) === num) s.classList.add('selected');
-    });
-
-    // Show bottom bar
-    const bar = document.getElementById('selectedSeatBar');
-    bar.classList.add('show');
-    document.getElementById('selectedSeatBarText').textContent = 'PC #' + num + ' selected';
-
-    // Enable confirm button
-    document.getElementById('confirmSeatBtn').disabled = false;
-}
-
-// ── Confirm: bring seat back to form ─────────────────────────────────
-function confirmSeatSelection() {
-    if (!selectedSeat) return;
-
-    document.getElementById('res_seat_input').value = selectedSeat;
-
-    // Show seat chosen box
-    const box = document.getElementById('seatChosenBox');
-    box.classList.add('show');
-    document.getElementById('seatChosenText').textContent = 'PC #' + selectedSeat + '  —  Lab ' + currentLab;
-
-    // Reset hint
-    const hint = document.getElementById('labHint');
-    hint.classList.remove('show');
-    document.getElementById('seatRequiredNote').style.display = 'none';
-
-    // Close seat plan modal
-    bootstrap.Modal.getInstance(document.getElementById('seatPlanModal')).hide();
-}
-
-// ── Reset seat ────────────────────────────────────────────────────────
-function resetSeatSelection() {
-    selectedSeat = null;
-    document.getElementById('res_seat_input').value = '';
-    document.getElementById('seatChosenBox').classList.remove('show');
-    document.getElementById('seatRequiredNote').style.display = 'none';
-
-    const bar = document.getElementById('selectedSeatBar');
-    if (bar) bar.classList.remove('show');
-
-    const btn = document.getElementById('confirmSeatBtn');
-    if (btn) btn.disabled = true;
-}
-
-// ── Form submit validation ────────────────────────────────────────────
-document.getElementById('reservationForm').addEventListener('submit', function(e) {
-    const lab  = document.getElementById('res_lab').value;
-    const seat = document.getElementById('res_seat_input').value;
-    if (lab && !seat) {
+    
+    if (!date) {
         e.preventDefault();
-        document.getElementById('seatRequiredNote').style.display = 'block';
-        openSeatPlan();
+        Swal.fire({ icon: 'warning', title: 'Missing Information', text: 'Please select a reservation date.', confirmButtonColor: '#9757d6' });
+        return;
+    }
+    
+    if (!timeSlot) {
+        e.preventDefault();
+        Swal.fire({ icon: 'warning', title: 'Missing Information', text: 'Please select a preferred time slot.', confirmButtonColor: '#9757d6' });
+        return;
+    }
+    
+    if (!pc) {
+        e.preventDefault();
+        document.getElementById('pcRequiredNote').style.display = 'block';
+        Swal.fire({ icon: 'warning', title: 'PC Not Selected', text: 'Please select a PC (1-50) for your reservation.', confirmButtonColor: '#9757d6' });
+        return;
     }
 });
 
@@ -1429,7 +1308,6 @@ function confirmLogout(e) {
 // ── Feedback modal opener ─────────────────────────────────────────────
 function openFeedbackForm(sitinId) {
     document.getElementById('feedback_sitin_id').value = sitinId;
-    // Hide history modal first, then show feedback modal
     bootstrap.Modal.getInstance(document.getElementById('historyModal')).hide();
     setTimeout(() => {
         new bootstrap.Modal(document.getElementById('feedbackModal')).show();
@@ -1441,6 +1319,39 @@ document.addEventListener('DOMContentLoaded', function() {
     new bootstrap.Modal(document.getElementById('historyModal')).show();
 });
 <?php endif; ?>
+
+// ── PC Status Checker ───────────────────────────────────────────────
+let lastCheckTime = new Date();
+
+function checkPCStatusUpdates() {
+    fetch('check_pc_updates.php?last_check=' + lastCheckTime.toISOString())
+        .then(response => response.json())
+        .then(data => {
+            if (data.updates && data.updates.length > 0) {
+                // Show notification for new updates
+                data.updates.forEach(update => {
+                    Swal.fire({
+                        title: 'PC Status Update',
+                        html: `Lab ${update.lab_name}, PC #${update.pc_number} is now <strong>${update.new_status}</strong><br>
+                               <small>${update.notes || 'No additional notes'}</small>`,
+                        icon: update.new_status === 'available' ? 'success' : 'warning',
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false,
+                        timer: 5000,
+                        timerProgressBar: true
+                    });
+                });
+                // Refresh the alerts area
+                location.reload();
+            }
+            lastCheckTime = new Date();
+        })
+        .catch(error => console.log('Error checking PC updates:', error));
+}
+
+// Check for updates every 30 seconds
+setInterval(checkPCStatusUpdates, 30000);
 
 </script>
 </body>
