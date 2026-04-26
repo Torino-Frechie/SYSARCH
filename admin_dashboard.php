@@ -42,6 +42,22 @@ if (isset($_POST['delete_reservation'])) {
 if (isset($_POST['update_reservation'])) {
     $res_id = intval($_POST['res_id']);
     $status = $conn->real_escape_string($_POST['status']);
+    
+    // If approving, check if PC is still available
+    if ($status === 'approved') {
+        $res = $conn->query("SELECT lab, seat_number FROM reservations WHERE id = $res_id")->fetch_assoc();
+        if ($res && $res['seat_number']) {
+            $check = $conn->query("SELECT status FROM pc_status WHERE lab_name = '{$res['lab']}' AND pc_number = {$res['seat_number']}");
+            $pc = $check->fetch_assoc();
+            if ($pc && $pc['status'] !== 'available') {
+                header("Location: admin_dashboard.php?tab=reservation&error=PC not available for approval");
+                exit();
+            }
+            // Mark PC as reserved/maintenance temporarily
+            $conn->query("UPDATE pc_status SET status = 'maintenance', notes = 'Reserved for {$res['lab']}' WHERE lab_name = '{$res['lab']}' AND pc_number = {$res['seat_number']}");
+        }
+    }
+    
     $conn->query("UPDATE reservations SET status = '$status' WHERE id = $res_id");
     header("Location: admin_dashboard.php?tab=reservation");
     exit();
@@ -107,49 +123,165 @@ if (isset($_POST['reset_all_student_sessions'])) {
     header("Location: admin_dashboard.php?tab=students"); exit();
 }
 
+// ── LAB CONFIGURATION HANDLERS ──────────────────────────────────────
+
+// Update lab configuration (total PCs)
+if (isset($_POST['update_lab_config'])) {
+    $lab_name = $conn->real_escape_string($_POST['lab_name']);
+    $total_pcs = intval($_POST['total_pcs']);
+    
+    // Update lab config
+    $conn->query("INSERT INTO lab_config (lab_name, total_pcs) VALUES ('$lab_name', $total_pcs)
+                  ON DUPLICATE KEY UPDATE total_pcs = $total_pcs");
+    
+    // Add new PCs if needed
+    for ($i = 1; $i <= $total_pcs; $i++) {
+        $conn->query("INSERT IGNORE INTO pc_status (lab_name, pc_number, status) VALUES ('$lab_name', $i, 'available')");
+    }
+    
+    header("Location: admin_dashboard.php?tab=lab_config&lab=" . urlencode($lab_name));
+    exit();
+}
+
+// Update individual PC status
+if (isset($_POST['update_pc_status'])) {
+    $lab_name = $conn->real_escape_string($_POST['lab_name']);
+    $pc_number = intval($_POST['pc_number']);
+    $status = $conn->real_escape_string($_POST['status']);
+    $notes = $conn->real_escape_string($_POST['notes'] ?? '');
+    
+    $conn->query("UPDATE pc_status SET status = '$status', notes = '$notes', updated_by = 'Admin' 
+                  WHERE lab_name = '$lab_name' AND pc_number = $pc_number");
+    
+    header("Location: admin_dashboard.php?tab=lab_config&lab=" . urlencode($lab_name));
+    exit();
+}
+
+// Batch update PC statuses
+if (isset($_POST['batch_update_pcs'])) {
+    $lab_name = $conn->real_escape_string($_POST['lab_name']);
+    $status = $conn->real_escape_string($_POST['batch_status']);
+    $pc_range = $_POST['pc_range'];
+    
+    if (strpos($pc_range, '-') !== false) {
+        list($start, $end) = explode('-', $pc_range);
+        for ($i = intval($start); $i <= intval($end); $i++) {
+            $conn->query("UPDATE pc_status SET status = '$status' WHERE lab_name = '$lab_name' AND pc_number = $i");
+        }
+    } elseif (strpos($pc_range, ',') !== false) {
+        $pcs = explode(',', $pc_range);
+        foreach ($pcs as $pc) {
+            $pc = intval(trim($pc));
+            $conn->query("UPDATE pc_status SET status = '$status' WHERE lab_name = '$lab_name' AND pc_number = $pc");
+        }
+    }
+    
+    header("Location: admin_dashboard.php?tab=lab_config&lab=" . urlencode($lab_name));
+    exit();
+}
+
+// Bulk status update
+if (isset($_POST['bulk_status_update'])) {
+    $lab_name = $conn->real_escape_string($_POST['lab_name']);
+    $status = $conn->real_escape_string($_POST['bulk_status_all']);
+    
+    $conn->query("UPDATE pc_status SET status = '$status' WHERE lab_name = '$lab_name'");
+    
+    header("Location: admin_dashboard.php?tab=lab_config&lab=" . urlencode($lab_name));
+    exit();
+}
+
 // Sit-in a student
 if (isset($_POST['do_sitin'])) {
     $sid     = $conn->real_escape_string(trim($_POST['sitin_id']));
     $purpose = $conn->real_escape_string(trim($_POST['sitin_purpose']));
     $lab     = $conn->real_escape_string(trim($_POST['sitin_lab']));
+    $pc_num  = isset($_POST['pc_number']) ? intval($_POST['pc_number']) : null;
     $sitin_error = '';
-    $chk = $conn->query("SELECT id FROM users WHERE id_number = '$sid'")->fetch_assoc();
+    
+    $chk = $conn->query("SELECT id, remaining_session FROM users WHERE id_number = '$sid'")->fetch_assoc();
     if (!$chk) {
         $sitin_error = "Student not found.";
+    } elseif ($chk['remaining_session'] <= 0) {
+        $sitin_error = "Student has no remaining sessions left.";
     } else {
         $active = $conn->query("SELECT id FROM sitin_records WHERE id_number = '$sid' AND logout_time IS NULL")->fetch_assoc();
         if ($active) {
             $sitin_error = "Student already has an active sit-in session.";
         } else {
-            $conn->query("INSERT INTO sitin_records (id_number, purpose, lab, login_time) VALUES ('$sid', '$purpose', '$lab', NOW())");
-            header("Location: admin_dashboard.php?tab=sitin"); exit();
+            if ($pc_num) {
+                // Check if PC is available
+                $pc_check = $conn->query("SELECT status FROM pc_status WHERE lab_name = '$lab' AND pc_number = $pc_num")->fetch_assoc();
+                if (!$pc_check || $pc_check['status'] !== 'available') {
+                    $sitin_error = "Selected PC is not available.";
+                    header("Location: admin_dashboard.php?tab=sitin&error=" . urlencode($sitin_error));
+                    exit();
+                }
+                // Mark PC as in-use
+                $conn->query("UPDATE pc_status SET status = 'in_use', notes = 'Used by $sid' WHERE lab_name = '$lab' AND pc_number = $pc_num");
+            }
+            
+            $conn->query("INSERT INTO sitin_records (id_number, purpose, lab, pc_number, login_time) 
+                          VALUES ('$sid', '$purpose', '$lab', " . ($pc_num ? $pc_num : "NULL") . ", NOW())");
+            header("Location: admin_dashboard.php?tab=sitin");
+            exit();
         }
+    }
+    if ($sitin_error) {
+        header("Location: admin_dashboard.php?tab=sitin&error=" . urlencode($sitin_error));
+        exit();
     }
 }
 
 // Logout a sit-in session
 if (isset($_POST['logout_session'])) {
     $sit_id = intval($_POST['sit_id']);
-    $rec = $conn->query("SELECT id_number FROM sitin_records WHERE id = $sit_id")->fetch_assoc();
+    $rec = $conn->query("SELECT id_number, lab, pc_number FROM sitin_records WHERE id = $sit_id")->fetch_assoc();
     if ($rec) {
         $student_id = $conn->real_escape_string($rec['id_number']);
+        $lab = $rec['lab'];
+        $pc_num = $rec['pc_number'];
+        
         $conn->query("UPDATE sitin_records SET logout_time = NOW() WHERE id = $sit_id");
         $conn->query("UPDATE users SET remaining_session = GREATEST(0, remaining_session - 1) WHERE id_number = '$student_id'");
+        
+        // Free up the PC
+        if ($pc_num) {
+            $conn->query("UPDATE pc_status SET status = 'available', notes = '' WHERE lab_name = '$lab' AND pc_number = $pc_num");
+        }
     }
-    header("Location: admin_dashboard.php?tab=sitin"); exit();
+    header("Location: admin_dashboard.php?tab=sitin");
+    exit();
 }
 
 // Reset all active sessions
 if (isset($_POST['reset_all_sessions'])) {
-    $active_students = $conn->query("SELECT DISTINCT id_number FROM sitin_records WHERE logout_time IS NULL");
+    $active_students = $conn->query("SELECT DISTINCT id_number, lab, pc_number FROM sitin_records WHERE logout_time IS NULL");
     $conn->query("UPDATE sitin_records SET logout_time = NOW() WHERE logout_time IS NULL");
     if ($active_students && $active_students->num_rows > 0) {
         while ($s = $active_students->fetch_assoc()) {
             $sid = $conn->real_escape_string($s['id_number']);
             $conn->query("UPDATE users SET remaining_session = GREATEST(0, remaining_session - 1) WHERE id_number = '$sid'");
+            if ($s['pc_number']) {
+                $conn->query("UPDATE pc_status SET status = 'available' WHERE lab_name = '{$s['lab']}' AND pc_number = {$s['pc_number']}");
+            }
         }
     }
-    header("Location: admin_dashboard.php?tab=sitin"); exit();
+    header("Location: admin_dashboard.php?tab=sitin");
+    exit();
+}
+
+// Get PC status for a lab (AJAX)
+if (isset($_GET['get_pc_status'])) {
+    $lab = $conn->real_escape_string($_GET['lab']);
+    $result = $conn->query("SELECT pc_number, status, notes FROM pc_status WHERE lab_name = '$lab' ORDER BY pc_number");
+    $pcs = [];
+    while ($row = $result->fetch_assoc()) {
+        $pcs[] = $row;
+    }
+    header('Content-Type: application/json');
+    echo json_encode($pcs);
+    exit();
 }
 
 // Search student via AJAX
@@ -181,6 +313,8 @@ if ($lang_result) while ($row = $lang_result->fetch_assoc()) {
 }
 
 $active_tab = $_GET['tab'] ?? 'dashboard';
+$selected_lab = $_GET['lab'] ?? '524';
+$error_msg = $_GET['error'] ?? '';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -379,6 +513,48 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
             display: flex;
             align-items: center;
             justify-content: space-between;
+        }
+
+        /* PC Status Grid */
+        .pc-grid {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 8px;
+            padding: 15px;
+        }
+        .pc-card {
+            text-align: center;
+            padding: 12px 5px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .pc-card.available {
+            background: linear-gradient(135deg, #d5f5e3, #a9dfbf);
+            color: #1a6835;
+            border: 2px solid #82c99a;
+        }
+        .pc-card.maintenance {
+            background: linear-gradient(135deg, #fdebd0, #f8c471);
+            color: #784212;
+            border: 2px solid #f39c12;
+        }
+        .pc-card.not_available {
+            background: linear-gradient(135deg, #fadbd8, #f1948a);
+            color: #7b241c;
+            border: 2px solid #e57373;
+            opacity: 0.7;
+        }
+        .pc-card.in_use {
+            background: linear-gradient(135deg, #d4e6f1, #a9cce3);
+            color: #1a5276;
+            border: 2px solid #3498db;
+        }
+        .pc-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
 
         /* ── Tables ── */
@@ -587,6 +763,34 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
             font-size: 0.78rem;
             font-family: 'Poppins', sans-serif;
         }
+        
+        /* Lab selector */
+        .lab-selector {
+            background: white;
+            border-radius: 12px;
+            padding: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .lab-btn {
+            padding: 8px 20px;
+            border-radius: 8px;
+            background: #f0f0f0;
+            color: #666;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .lab-btn.active {
+            background: linear-gradient(135deg, var(--ccs-purple), #7c45b8);
+            color: white;
+        }
+        .lab-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 8px rgba(151,87,214,0.2);
+        }
     </style>
 </head>
 <body>
@@ -600,6 +804,9 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
     </div>
 
     <div class="nav-links">
+        <a href="admin_dashboard.php?tab=dashboard" class="<?= $active_tab==='dashboard'?'active':'' ?>">
+            <i class="bi bi-speedometer2"></i> Dashboard
+        </a>
         <a href="admin_dashboard.php?tab=students" class="<?= $active_tab==='students'?'active':'' ?>">
             <i class="bi bi-people-fill"></i> Students
         </a>
@@ -608,6 +815,9 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
         </a>
         <a href="admin_dashboard.php?tab=sitin" class="<?= $active_tab==='sitin'?'active':'' ?>">
             <i class="bi bi-display"></i> Current
+        </a>
+        <a href="admin_dashboard.php?tab=lab_config" class="<?= $active_tab==='lab_config'?'active':'' ?>">
+            <i class="bi bi-pc-display"></i> Lab Config
         </a>
         <a href="admin_dashboard.php?tab=records" class="<?= $active_tab==='records'?'active':'' ?>">
             <i class="bi bi-table"></i> Records
@@ -644,6 +854,7 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
                     'students'      => '<i class="bi bi-people-fill me-2"></i>Students',
                     'sitinform'     => '<i class="bi bi-box-arrow-in-right me-2"></i>Sit-in Student',
                     'sitin'         => '<i class="bi bi-display me-2"></i>Current Sit-in',
+                    'lab_config'    => '<i class="bi bi-pc-display me-2"></i>Laboratory Configuration',
                     'records'       => '<i class="bi bi-table me-2"></i>Sit-in Records',
                     'announcements' => '<i class="bi bi-megaphone-fill me-2"></i>Announcements',
                     'reports'       => '<i class="bi bi-bar-chart-fill me-2"></i>Sit-in Reports',
@@ -659,6 +870,13 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
 
     <!-- Content Area -->
     <div class="content-area">
+        
+        <?php if ($error_msg): ?>
+            <div class="alert alert-danger alert-dismissible fade show mb-3" style="border-radius:12px;">
+                <i class="bi bi-exclamation-triangle-fill me-2"></i><?= htmlspecialchars($error_msg) ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        <?php endif; ?>
 
 
     <!-- ══════════════ DASHBOARD TAB ══════════════ -->
@@ -760,18 +978,6 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
             plugins: { legend: { position: 'bottom', labels: { font:{ family:'Poppins', size:11 }, boxWidth:14 } } }
         }
     });
-
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('action') === 'logout') {
-        Swal.fire({
-            title: 'Success!',
-            text: 'Logout successfully',
-            icon: 'success',
-            confirmButtonColor: '#9757d6',
-            timer: 3000
-        });
-        window.history.replaceState({}, document.title, window.location.pathname);
-    }
     </script>
 
 
@@ -972,6 +1178,200 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
     </div>
 
 
+    <!-- ══════════════ LAB CONFIGURATION TAB ══════════════ -->
+    <?php elseif ($active_tab === 'lab_config'): ?>
+    
+    <!-- Get all labs -->
+    <?php
+    $labs = $conn->query("SELECT * FROM lab_config ORDER BY lab_name");
+    $current_lab = $selected_lab;
+    
+    // Get PC status for current lab
+    $pcs = $conn->query("SELECT * FROM pc_status WHERE lab_name = '$current_lab' ORDER BY pc_number");
+    $available_count = $conn->query("SELECT COUNT(*) as cnt FROM pc_status WHERE lab_name = '$current_lab' AND status = 'available'")->fetch_assoc()['cnt'] ?? 0;
+    $maintenance_count = $conn->query("SELECT COUNT(*) as cnt FROM pc_status WHERE lab_name = '$current_lab' AND status = 'maintenance'")->fetch_assoc()['cnt'] ?? 0;
+    $not_available_count = $conn->query("SELECT COUNT(*) as cnt FROM pc_status WHERE lab_name = '$current_lab' AND status = 'not_available'")->fetch_assoc()['cnt'] ?? 0;
+    $in_use_count = $conn->query("SELECT COUNT(*) as cnt FROM pc_status WHERE lab_name = '$current_lab' AND status = 'in_use'")->fetch_assoc()['cnt'] ?? 0;
+    
+    // Calculate total not available for display
+    $total_not_available = $maintenance_count + $not_available_count + $in_use_count;
+    $total_pcs = $conn->query("SELECT total_pcs FROM lab_config WHERE lab_name = '$current_lab'")->fetch_assoc()['total_pcs'] ?? 50;
+    ?>
+    
+    <!-- Lab Selector -->
+    <div class="lab-selector">
+        <?php 
+        $labs->data_seek(0);
+        while ($lab = $labs->fetch_assoc()): 
+        ?>
+            <a href="admin_dashboard.php?tab=lab_config&lab=<?= urlencode($lab['lab_name']) ?>" 
+               class="lab-btn <?= $current_lab === $lab['lab_name'] ? 'active' : '' ?>">
+                <i class="bi bi-pc-display"></i> Lab <?= htmlspecialchars($lab['lab_name']) ?>
+            </a>
+        <?php endwhile; ?>
+    </div>
+    
+    <!-- Lab Stats Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #27ae60;"><i class="bi bi-check-circle-fill"></i></div>
+                <div>
+                    <div class="stat-num"><?= $available_count ?></div>
+                    <div class="stat-label">Available</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #f39c12;"><i class="bi bi-tools"></i></div>
+                <div>
+                    <div class="stat-num"><?= $maintenance_count ?></div>
+                    <div class="stat-label">Maintenance</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #3498db;"><i class="bi bi-person-workspace"></i></div>
+                <div>
+                    <div class="stat-num"><?= $in_use_count ?></div>
+                    <div class="stat-label">In Use</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #e74c3c;"><i class="bi bi-x-lg"></i></div>
+                <div>
+                    <div class="stat-num"><?= $not_available_count ?></div>
+                    <div class="stat-label">Not Available</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Bulk Actions -->
+    <div class="dash-card mb-4">
+        <div class="card-header-purple">
+            <span><i class="bi bi-lightning-charge-fill me-2"></i>Bulk Actions - Lab <?= htmlspecialchars($current_lab) ?></span>
+        </div>
+        <div class="card-body p-3">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <form method="POST" class="d-flex gap-2">
+                        <input type="hidden" name="lab_name" value="<?= $current_lab ?>">
+                        <select name="bulk_status_all" class="form-select" required>
+                            <option value="">Select Status</option>
+                            <option value="available">Set All Available</option>
+                            <option value="maintenance">Set All Maintenance</option>
+                            <option value="not_available">Set All Not Available</option>
+                        </select>
+                        <button type="submit" name="bulk_status_update" class="btn btn-purple">Apply to All</button>
+                    </form>
+                </div>
+                <div class="col-md-4">
+                    <form method="POST" class="d-flex gap-2">
+                        <input type="hidden" name="lab_name" value="<?= $current_lab ?>">
+                        <input type="text" name="pc_range" class="form-control" placeholder="e.g., 1-10 or 1,3,5,7" required>
+                        <select name="batch_status" class="form-select" required>
+                            <option value="">Set Status</option>
+                            <option value="available">Available</option>
+                            <option value="maintenance">Maintenance</option>
+                            <option value="not_available">Not Available</option>
+                        </select>
+                        <button type="submit" name="batch_update_pcs" class="btn btn-purple">Apply to Range</button>
+                    </form>
+                </div>
+                <div class="col-md-4">
+                    <form method="POST" class="d-flex gap-2">
+                        <input type="hidden" name="lab_name" value="<?= $current_lab ?>">
+                        <input type="number" name="total_pcs" class="form-control" placeholder="Total PCs" 
+                               value="<?= $total_pcs ?>" required>
+                        <button type="submit" name="update_lab_config" class="btn btn-purple">Update Total</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- PC Status Grid -->
+    <div class="dash-card">
+        <div class="card-header-purple">
+            <span><i class="bi bi-grid-3x3-gap-fill me-2"></i>PC Status Map - Lab <?= htmlspecialchars($current_lab) ?></span>
+        </div>
+        <div class="card-body p-3">
+            <div class="pc-grid">
+                <?php
+                $total = $total_pcs;
+                for ($i = 1; $i <= $total; $i++):
+                    $pc_data = null;
+                    if ($pcs) {
+                        $pcs->data_seek(0);
+                        while ($row = $pcs->fetch_assoc()) {
+                            if ($row['pc_number'] == $i) {
+                                $pc_data = $row;
+                                break;
+                            }
+                        }
+                    }
+                    $status = $pc_data ? $pc_data['status'] : 'available';
+                    $notes = $pc_data ? $pc_data['notes'] : '';
+                    $statusClass = $status;
+                    $statusText = ucfirst(str_replace('_', ' ', $status));
+                ?>
+                <div class="pc-card <?= $statusClass ?>" onclick="openPCEditModal('<?= $current_lab ?>', <?= $i ?>, '<?= $status ?>', '<?= htmlspecialchars($notes) ?>')">
+                    <i class="bi bi-pc-display-horizontal d-block mb-1" style="font-size:1.2rem;"></i>
+                    <span><?= $i ?></span>
+                </div>
+                <?php endfor; ?>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Edit PC Modal -->
+    <div class="modal fade" id="editPcModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header-purple d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold"><i class="bi bi-pencil-fill me-2"></i>Edit PC Status</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form method="POST">
+                    <div class="modal-body p-4">
+                        <input type="hidden" name="lab_name" id="edit_lab_name">
+                        <input type="hidden" name="pc_number" id="edit_pc_number">
+                        
+                        <div class="mb-3 text-center">
+                            <h4>PC #<span id="edit_pc_display"></span></h4>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label" style="font-size:0.78rem;color:#777;">Status</label>
+                            <select name="status" id="edit_status" class="form-select" required>
+                                <option value="available">Available</option>
+                                <option value="maintenance">Maintenance</option>
+                                <option value="not_available">Not Available</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label" style="font-size:0.78rem;color:#777;">Notes (Optional)</label>
+                            <textarea name="notes" id="edit_notes" class="form-control" rows="2" placeholder="Reason for maintenance/not available status..."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" name="update_pc_status" class="btn btn-purple px-4">
+                            <i class="bi bi-save-fill me-1"></i> Update PC
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+
     <!-- ══════════════ SIT-IN FORM TAB ══════════════ -->
     <?php elseif ($active_tab === 'sitinform'): ?>
 
@@ -982,12 +1382,6 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
                     <span><i class="bi bi-search me-2"></i>Search & Sit-in Student</span>
                 </div>
                 <div class="card-body p-4">
-
-                    <?php if (!empty($sitin_error)): ?>
-                        <div class="alert alert-danger py-2 px-3 mb-3" style="font-size:0.85rem;border-radius:10px;">
-                            <i class="bi bi-exclamation-circle-fill me-2"></i><?= htmlspecialchars($sitin_error) ?>
-                        </div>
-                    <?php endif; ?>
 
                     <div class="mb-3">
                         <label class="form-label" style="font-size:0.8rem;color:#777;">Search by ID Number or Name</label>
@@ -1041,24 +1435,41 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
                                 <option>Other</option>
                             </select>
                         </div>
-                        <div class="mb-4">
+                        <div class="mb-3">
                             <label class="form-label" style="font-size:0.8rem;color:#777;">Lab</label>
-                            <select name="sitin_lab" class="form-select" required>
+                            <select name="sitin_lab" id="sitin_lab" class="form-select" required>
                                 <option value="">-- Select Lab --</option>
-                                <option>524</option>
-                                <option>526</option>
-                                <option>528</option>
-                                <option>530</option>
-                                <option>542</option>
-                                <option>Mac Lab</option>
+                                <?php
+                                $lab_list = $conn->query("SELECT lab_name FROM lab_config ORDER BY lab_name");
+                                while ($lab = $lab_list->fetch_assoc()):
+                                ?>
+                                <option value="<?= $lab['lab_name'] ?>">Lab <?= $lab['lab_name'] ?></option>
+                                <?php endwhile; ?>
                             </select>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label" style="font-size:0.8rem;color:#777;">Select PC</label>
+                            <div id="pcSelectionArea">
+                                <div class="alert alert-info" id="pcSelectHint">Please select a lab first</div>
+                                <div id="pcGridSelection" style="display: none;">
+                                    <div class="mb-2">
+                                        <div class="d-flex gap-2 mb-3">
+                                            <button type="button" class="btn btn-sm btn-outline-success" onclick="filterPCs('all')">All</button>
+                                            <button type="button" class="btn btn-sm btn-outline-success" onclick="filterPCs('available')">Available Only</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearPCSelection()">Clear</button>
+                                        </div>
+                                        <div id="pcGridMini" style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; max-height: 300px; overflow-y: auto; padding: 10px; background: #f8f9fa; border-radius: 10px;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <input type="hidden" name="pc_number" id="selected_pc">
                         </div>
 
                         <div class="d-flex gap-2">
                             <button type="button" class="btn btn-secondary btn-sm px-3" onclick="resetSitinForm()">
                                 <i class="bi bi-x-circle me-1"></i> Cancel
                             </button>
-                            <button type="submit" name="do_sitin" class="btn btn-purple px-4">
+                            <button type="submit" name="do_sitin" class="btn btn-purple px-4" id="submitSitinBtn" disabled>
                                 <i class="bi bi-box-arrow-in-right me-2"></i>Sit In
                             </button>
                         </div>
@@ -1088,6 +1499,7 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
                         <th>Name</th>
                         <th>Purpose</th>
                         <th>Lab</th>
+                        <th>PC #</th>
                         <th>Login Time</th>
                         <th>Remaining Sessions</th>
                         <th>Status</th>
@@ -1114,6 +1526,7 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
                         <td><?= htmlspecialchars(trim($r['student_name']) ?: '—') ?></td>
                         <td><?= htmlspecialchars($r['purpose']) ?></td>
                         <td><?= htmlspecialchars($r['lab']) ?></td>
+                        <td><?= $r['pc_number'] ? '<span class="badge bg-primary">#' . $r['pc_number'] . '</span>' : '—' ?></td>
                         <td><?= htmlspecialchars($r['login_time']) ?></td>
                         <td>
                             <?php
@@ -1139,7 +1552,7 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
                         </td>
                     </tr>
                 <?php endwhile; else: ?>
-                    <tr><td colspan="9" class="text-center text-muted py-3">No active sit-in sessions.</td></tr>
+                    <tr><td colspan="10" class="text-center text-muted py-3">No active sit-in sessions.</span></td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>
@@ -1163,6 +1576,7 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
                         <th>Name</th>
                         <th>Purpose</th>
                         <th>Lab</th>
+                        <th>PC #</th>
                         <th>Login Time</th>
                         <th>Logout Time</th>
                         <th>Status</th>
@@ -1186,6 +1600,7 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
                         <td><?= htmlspecialchars(trim($r['student_name']) ?: '—') ?></td>
                         <td><?= htmlspecialchars($r['purpose']) ?></td>
                         <td><?= htmlspecialchars($r['lab']) ?></td>
+                        <td><?= $r['pc_number'] ? '#' . $r['pc_number'] : '—' ?></td>
                         <td><?= htmlspecialchars($r['login_time']) ?></td>
                         <td><?= $is_active ? '<span class="text-muted">—</span>' : htmlspecialchars($r['logout_time']) ?></td>
                         <td>
@@ -1197,7 +1612,7 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
                         </td>
                     </tr>
                 <?php endwhile; else: ?>
-                    <tr><td colspan="8" class="text-center text-muted py-3">No sit-in records found.</td></tr>
+                    <tr><td colspan="9" class="text-center text-muted py-3">No sit-in records found.</span></td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>
@@ -1385,7 +1800,7 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
                             <div style="font-size:0.83rem;color:#333;font-style:italic;">
                                 "<?= htmlspecialchars($f['message']) ?>"
                             </div>
-                        </td>
+                          </td>
                         <td><?= htmlspecialchars($f['created_at']) ?></td>
                     </tr>
                 <?php endwhile; ?>
@@ -1419,6 +1834,7 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
                         <th>Student ID</th>
                         <th>Purpose</th>
                         <th>Lab</th>
+                        <th>PC #</th>
                         <th>Time</th>
                         <th>Date</th>
                         <th>Status</th>
@@ -1436,6 +1852,7 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
                         <td><?= htmlspecialchars($r['id_number']) ?></td>
                         <td><?= htmlspecialchars($r['purpose']) ?></td>
                         <td><?= htmlspecialchars($r['lab']) ?></td>
+                        <td><?= !empty($r['seat_number']) ? '#' . $r['seat_number'] : '—' ?></td>
                         <td><?= htmlspecialchars($r['preferred_time']) ?></td>
                         <td><?= htmlspecialchars($r['reservation_date']) ?></td>
                         <td>
@@ -1451,8 +1868,8 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
                             ?><span class="badge-done"><?= htmlspecialchars($status) ?></span><?php
                             endif;
                             ?>
-                        </td>
-                        <td>
+                          </td>
+                          <td>
                             <?php if ($r['status'] === 'pending'): ?>
                                 <form method="POST" style="display:inline;">
                                     <input type="hidden" name="res_id" value="<?= $r['id'] ?>">
@@ -1483,7 +1900,7 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
                                     <i class="bi bi-trash-fill"></i> Delete
                                 </button>
                             </form>
-                        </td>
+                          </td>
                     </tr>
 
                     <!-- Edit Reservation Modal -->
@@ -1526,7 +1943,7 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
                     </div>
 
                 <?php endwhile; else: ?>
-                    <tr><td colspan="8" class="text-center text-muted py-3">No reservations found.</td></tr>
+                    <tr><td colspan="9" class="text-center text-muted py-3">No reservations found.</td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>
@@ -1547,6 +1964,9 @@ $active_tab = $_GET['tab'] ?? 'dashboard';
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
+let currentPCFilter = 'all';
+let currentPCMap = {};
+
 function confirmLogout(e) {
     e.preventDefault();
     Swal.fire({
@@ -1583,22 +2003,31 @@ function confirmLogout(e) {
 $(document).ready(function () {
     const dtLang = { emptyTable: "No data available", zeroRecords: "No matching records found" };
     if ($('#studentTable').length)     $('#studentTable').DataTable({ pageLength:10, order:[[0,'asc']], language: dtLang });
-   if ($('#sitinTable').length) {
-    $.fn.dataTable.ext.errMode = 'none'; // suppress the warning popup
-    $('#sitinTable').DataTable({
-        pageLength: 10,
-        order: [[0, 'desc']],
-        language: dtLang,
-        columnDefs: [
-            { targets: -1, orderable: false, searchable: false }
-        ]
-    });
-}
+    if ($('#sitinTable').length) {
+        $.fn.dataTable.ext.errMode = 'none';
+        $('#sitinTable').DataTable({
+            pageLength: 10,
+            order: [[0, 'desc']],
+            language: dtLang,
+            columnDefs: [
+                { targets: -1, orderable: false, searchable: false }
+            ]
+        });
+    }
     $.fn.dataTable.ext.errMode = 'none';
     if ($('#recordTable').length)      $('#recordTable').DataTable({ pageLength:10, order:[[0,'desc']], language: dtLang });
     if ($('#reservationTable').length) $('#reservationTable').DataTable({ pageLength:10, order:[[0,'desc']], language: dtLang });
     if ($('#feedbackTable').length)    $('#feedbackTable').DataTable({ pageLength:10, order:[[0,'desc']], language: dtLang });
 });
+
+function openPCEditModal(lab, pc, status, notes) {
+    document.getElementById('edit_lab_name').value = lab;
+    document.getElementById('edit_pc_number').value = pc;
+    document.getElementById('edit_pc_display').textContent = pc;
+    document.getElementById('edit_status').value = status;
+    document.getElementById('edit_notes').value = notes;
+    new bootstrap.Modal(document.getElementById('editPcModal')).show();
+}
 
 // ── Sit-in student search ──
 const lookup = document.getElementById('studentLookup');
@@ -1629,11 +2058,11 @@ if (lookup) {
 }
 
 function selectStudent(id, first, last, course, level, remaining) {
-    document.getElementById('sitin_id').value           = id;
-    document.getElementById('display_id').innerText     = id;
-    document.getElementById('display_name').innerText   = first + ' ' + last;
+    document.getElementById('sitin_id').value = id;
+    document.getElementById('display_id').innerText = id;
+    document.getElementById('display_name').innerText = first + ' ' + last;
     document.getElementById('display_course').innerText = course;
-    document.getElementById('display_level').innerText  = 'Year ' + level;
+    document.getElementById('display_level').innerText = 'Year ' + level;
 
     const rem = parseInt(remaining) || 0;
     const color = rem > 10 ? '#27ae60' : (rem > 5 ? '#f39c12' : '#e74c3c');
@@ -1645,6 +2074,98 @@ function selectStudent(id, first, last, course, level, remaining) {
     document.getElementById('searchResults').style.display = 'none';
     document.getElementById('studentLookup').value = first + ' ' + last;
     document.getElementById('sitinForm').style.display = 'block';
+    
+    // Trigger lab selection check
+    const labSelect = document.getElementById('sitin_lab');
+    if (labSelect.value) {
+        loadPCsForLab(labSelect.value);
+    }
+}
+
+// Load PCs for selected lab
+document.getElementById('sitin_lab').addEventListener('change', function() {
+    const lab = this.value;
+    if (lab) {
+        loadPCsForLab(lab);
+    } else {
+        document.getElementById('pcGridSelection').style.display = 'none';
+        document.getElementById('pcSelectHint').style.display = 'block';
+    }
+});
+
+function loadPCsForLab(lab) {
+    fetch('admin_dashboard.php?get_pc_status&lab=' + encodeURIComponent(lab))
+        .then(r => r.json())
+        .then(data => {
+            currentPCMap = {};
+            data.forEach(pc => {
+                currentPCMap[pc.pc_number] = pc;
+            });
+            displayPCGrid();
+            document.getElementById('pcSelectHint').style.display = 'none';
+            document.getElementById('pcGridSelection').style.display = 'block';
+        });
+}
+
+function displayPCGrid() {
+    const grid = document.getElementById('pcGridMini');
+    const lab = document.getElementById('sitin_lab').value;
+    if (!lab) return;
+    
+    // Get total PCs for this lab
+    fetch('admin_dashboard.php?get_pc_status&lab=' + encodeURIComponent(lab))
+        .then(r => r.json())
+        .then(data => {
+            const totalPCs = data.length || 50;
+            let html = '';
+            for (let i = 1; i <= totalPCs; i++) {
+                const pc = currentPCMap[i];
+                const status = pc ? pc.status : 'available';
+                const isAvailable = status === 'available';
+                const statusClass = isAvailable ? 'available' : (status === 'maintenance' ? 'maintenance' : 'not_available');
+                const selected = document.getElementById('selected_pc').value == i;
+                
+                if (currentPCFilter === 'available' && !isAvailable) continue;
+                
+                html += `
+                    <div class="pc-card ${statusClass} ${selected ? 'selected' : ''}" 
+                         style="cursor: ${isAvailable ? 'pointer' : 'not-allowed'}; padding: 8px 5px; text-align: center; border-radius: 8px;"
+                         onclick="${isAvailable ? `selectPC(${i}, '${status}')` : ''}">
+                        <i class="bi bi-pc-display-horizontal d-block mb-1" style="font-size: 1rem;"></i>
+                        <span style="font-size: 0.7rem;">${i}</span>
+                        ${!isAvailable ? `<div style="font-size: 0.6rem; color: #666;">${status === 'maintenance' ? 'Maintenance' : 'Not Available'}</div>` : ''}
+                    </div>
+                `;
+            }
+            grid.innerHTML = html;
+        });
+}
+
+function selectPC(pcNumber, status) {
+    if (status !== 'available') {
+        Swal.fire('Not Available', 'This PC is currently ' + (status === 'maintenance' ? 'under maintenance' : 'not available'), 'warning');
+        return;
+    }
+    document.getElementById('selected_pc').value = pcNumber;
+    document.getElementById('submitSitinBtn').disabled = false;
+    
+    // Highlight selected PC
+    document.querySelectorAll('#pcGridMini .pc-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    Swal.fire('PC Selected', `PC #${pcNumber} has been selected for sit-in.`, 'success');
+}
+
+function filterPCs(filter) {
+    currentPCFilter = filter;
+    displayPCGrid();
+}
+
+function clearPCSelection() {
+    document.getElementById('selected_pc').value = '';
+    document.getElementById('submitSitinBtn').disabled = true;
+    displayPCGrid();
+    Swal.fire('Cleared', 'PC selection has been cleared.', 'info');
 }
 
 function openAddModal() {
@@ -1670,7 +2191,7 @@ function deleteStudent(id) {
 }
 
 function resetAllSessions() {
-    if (!confirm('Log out ALL active sessions?')) return;
+    if (!confirm('Log out ALL active sessions? This will deduct session credits for all active students.')) return;
     var f = document.createElement('form');
     f.method = 'POST';
     f.action = 'admin_dashboard.php?tab=sitin';
@@ -1687,6 +2208,10 @@ function resetSitinForm() {
     document.getElementById('searchResults').style.display = 'none';
     document.getElementById('display_remaining').innerText = '—';
     document.getElementById('display_remaining').style.color = '';
+    document.getElementById('selected_pc').value = '';
+    document.getElementById('submitSitinBtn').disabled = true;
+    document.getElementById('pcGridSelection').style.display = 'none';
+    document.getElementById('pcSelectHint').style.display = 'block';
 }
 </script>
 </body>

@@ -829,8 +829,12 @@ if (isset($_POST['submit_feedback'])) {
                                 <label class="field-label">Lab</label>
                                 <select name="res_lab" id="res_lab" class="form-select" required>
                                     <option value="">-- Select Lab --</option>
-                                    <option>524</option><option>526</option><option>528</option>
-                                    <option>530</option><option>542</option><option>Mac Lab</option>
+                                    <option>524</option>
+                                    <option>526</option>
+                                    <option>528</option>
+                                    <option>530</option>
+                                    <option>544</option>
+                                    <option>Mac Lab</option>
                                 </select>
                                 <div class="lab-hint" id="labHint">
                                     <i class="bi bi-arrow-up-circle-fill me-1"></i>Lab selected — view seat plan above
@@ -980,6 +984,218 @@ if (isset($_POST['submit_feedback'])) {
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <script>
+
+// ── PHP data for PC status ──────────────────────────────────────────
+const pcStatusData = <?php 
+    $pc_data = [];
+    $labs = $conn->query("SELECT lab_name FROM lab_config");
+    while ($lab = $labs->fetch_assoc()) {
+        $lab_name = $lab['lab_name'];
+        $pcs = $conn->query("SELECT pc_number, status FROM pc_status WHERE lab_name = '$lab_name'");
+        $pc_data[$lab_name] = [];
+        while ($pc = $pcs->fetch_assoc()) {
+            $pc_data[$lab_name][$pc['pc_number']] = $pc['status'];
+        }
+    }
+    echo json_encode($pc_data);
+?>;
+
+let currentReservationLab = '';
+let currentReservationDate = '';
+let selectedReservationSeat = null;
+
+// Override the openSeatPlan function to use real PC status
+function openSeatPlan() {
+    const lab = document.getElementById('res_lab').value;
+    const date = document.getElementById('res_date').value;
+
+    if (!lab) {
+        Swal.fire({ icon: 'warning', title: 'Select a lab first', text: 'Please choose a laboratory before picking a seat.', confirmButtonColor: '#9757d6' });
+        return;
+    }
+
+    currentReservationLab = lab;
+    currentReservationDate = date;
+    document.getElementById('seatPlanLabLabel').textContent = 'Lab ' + lab;
+    buildRealSeatGrid(lab, date);
+    
+    if (!seatModal) {
+        seatModal = new bootstrap.Modal(document.getElementById('seatPlanModal'), { backdrop: 'static' });
+    }
+    seatModal.show();
+}
+
+function buildRealSeatGrid(lab, date) {
+    const grid = document.getElementById('pcGrid');
+    
+    // Get occupied seats from reservations for this lab/date
+    let occupiedReservations = [];
+    <?php
+    $res_seats = $conn->query("SELECT lab, reservation_date, seat_number FROM reservations WHERE status IN ('Pending', 'Approved') AND seat_number IS NOT NULL");
+    $res_seat_map = [];
+    while ($rs = $res_seat_map->fetch_assoc()) {
+        $res_seat_map[$rs['lab']][$rs['reservation_date']][] = $rs['seat_number'];
+    }
+    ?>
+    const reservationOccupied = <?= json_encode($res_seat_map) ?>;
+    
+    // Get PC status from database
+    const labPCs = pcStatusData[lab] || {};
+    
+    // Get total PCs for this lab
+    let totalPCs = 50;
+    <?php
+    $lab_totals = $conn->query("SELECT lab_name, total_pcs FROM lab_config");
+    $lab_total_map = [];
+    while ($lt = $lab_totals->fetch_assoc()) {
+        $lab_total_map[$lt['lab_name']] = $lt['total_pcs'];
+    }
+    ?>
+    const labTotals = <?= json_encode($lab_total_map) ?>;
+    if (labTotals[lab]) totalPCs = labTotals[lab];
+    
+    const occupiedByReservation = (reservationOccupied[lab] && reservationOccupied[lab][date]) ? reservationOccupied[lab][date] : [];
+    
+    grid.innerHTML = '';
+    let availCount = 0;
+    
+    for (let i = 1; i <= totalPCs; i++) {
+        const pcStatus = labPCs[i] || 'available';
+        const isReserved = occupiedByReservation.includes(i);
+        const isOccupied = (pcStatus !== 'available') || isReserved;
+        const isSelected = (selectedReservationSeat === i);
+        
+        let statusText = '';
+        let statusClass = '';
+        
+        if (isSelected) {
+            statusClass = 'selected';
+            statusText = 'Selected';
+        } else if (isReserved) {
+            statusClass = 'occupied';
+            statusText = 'Reserved';
+        } else if (pcStatus === 'maintenance') {
+            statusClass = 'maintenance';
+            statusText = 'Maintenance';
+        } else if (pcStatus === 'offline') {
+            statusClass = 'offline';
+            statusText = 'Offline';
+        } else if (pcStatus === 'in_use') {
+            statusClass = 'occupied';
+            statusText = 'In Use';
+        } else {
+            statusClass = 'available';
+            statusText = 'Available';
+            if (!isOccupied) availCount++;
+        }
+        
+        const isSelectable = !isOccupied && pcStatus === 'available' && !isReserved;
+        
+        const div = document.createElement('div');
+        div.className = 'pc-seat ' + statusClass;
+        div.dataset.num = i;
+        div.title = `PC #${i} — ${statusText}`;
+        
+        div.innerHTML = `
+            <i class="bi bi-pc-display-horizontal"></i>
+            <span>${i}</span>
+            ${isSelectable ? `
+            <div class="seat-popover" id="pop_${i}" onclick="event.stopPropagation()">
+                <div class="pop-title"><i class="bi bi-pc-display-horizontal"></i>PC #${i}</div>
+                <button class="pop-btn-sit" onclick="selectThisSeat(${i})">
+                    <i class="bi bi-cursor-fill me-1"></i>Reserve This PC
+                </button>
+                <button class="pop-btn-cancel" onclick="closePop(${i}); event.stopPropagation()">✕ Cancel</button>
+            </div>` : ''}
+        `;
+        
+        if (isSelectable) {
+            div.addEventListener('click', function(e) {
+                e.stopPropagation();
+                togglePop(i);
+            });
+        }
+        
+        grid.appendChild(div);
+    }
+    
+    document.getElementById('availableCount').textContent = availCount;
+    document.getElementById('availableCount2').textContent = availCount;
+}
+
+function selectThisSeat(num) {
+    selectedReservationSeat = num;
+    closePop(num);
+    
+    document.querySelectorAll('.pc-seat').forEach(s => {
+        s.classList.remove('selected');
+        if (parseInt(s.dataset.num) === num) s.classList.add('selected');
+    });
+    
+    const bar = document.getElementById('selectedSeatBar');
+    bar.classList.add('show');
+    document.getElementById('selectedSeatBarText').textContent = 'PC #' + num + ' selected';
+    document.getElementById('confirmSeatBtn').disabled = false;
+}
+
+function confirmSeatSelection() {
+    if (!selectedReservationSeat) return;
+    
+    document.getElementById('res_seat_input').value = selectedReservationSeat;
+    const box = document.getElementById('seatChosenBox');
+    box.classList.add('show');
+    document.getElementById('seatChosenText').textContent = 'PC #' + selectedReservationSeat + '  —  Lab ' + currentReservationLab;
+    
+    const hint = document.getElementById('labHint');
+    hint.classList.remove('show');
+    document.getElementById('seatRequiredNote').style.display = 'none';
+    
+    bootstrap.Modal.getInstance(document.getElementById('seatPlanModal')).hide();
+}
+
+function resetSeatSelection() {
+    selectedReservationSeat = null;
+    document.getElementById('res_seat_input').value = '';
+    document.getElementById('seatChosenBox').classList.remove('show');
+    document.getElementById('seatRequiredNote').style.display = 'none';
+    
+    const bar = document.getElementById('selectedSeatBar');
+    if (bar) bar.classList.remove('show');
+    
+    const btn = document.getElementById('confirmSeatBtn');
+    if (btn) btn.disabled = true;
+}
+
+function togglePop(num) {
+    document.querySelectorAll('.seat-popover').forEach(p => {
+        if (p.id !== 'pop_' + num) p.style.display = 'none';
+    });
+    const pop = document.getElementById('pop_' + num);
+    if (pop) pop.style.display = (pop.style.display === 'block') ? 'none' : 'block';
+}
+
+function closePop(num) {
+    const pop = document.getElementById('pop_' + num);
+    if (pop) pop.style.display = 'none';
+}
+
+// Close popovers on outside click
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.pc-seat')) {
+        document.querySelectorAll('.seat-popover').forEach(p => p.style.display = 'none');
+    }
+});
+
+// Update reservation form validation
+document.getElementById('reservationForm').addEventListener('submit', function(e) {
+    const lab = document.getElementById('res_lab').value;
+    const seat = document.getElementById('res_seat_input').value;
+    if (lab && !seat) {
+        e.preventDefault();
+        document.getElementById('seatRequiredNote').style.display = 'block';
+        openSeatPlan();
+    }
+});
 // ── PHP data ──────────────────────────────────────────────────────────
 const occupiedData = <?= json_encode($occupied_seats) ?>;
 
