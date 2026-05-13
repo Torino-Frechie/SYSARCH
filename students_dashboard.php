@@ -11,22 +11,24 @@ if ($conn->connect_error) die("Connection failed: " . $conn->connect_error);
 
 $id_number = $_SESSION['user'];
 
-// ── Handle Profile Update ────────────────────────────────────────────
+/* ── Handle Profile Update ─────────────────────────────────────────── */
 if (isset($_POST['update_profile'])) {
-    $fname   = $conn->real_escape_string(trim($_POST['first_name']));
-    $mname   = $conn->real_escape_string(trim($_POST['middle_name']));
-    $lname   = $conn->real_escape_string(trim($_POST['last_name']));
-    $email   = $conn->real_escape_string(trim($_POST['email']));
-    $course  = $conn->real_escape_string(trim($_POST['course']));
-    $level   = intval($_POST['year_level']);
+    $fname   = $conn->real_escape_string(trim($_POST['first_name'] ?? ''));
+    $mname   = $conn->real_escape_string(trim($_POST['middle_name'] ?? ''));
+    $lname   = $conn->real_escape_string(trim($_POST['last_name'] ?? ''));
+    $email   = $conn->real_escape_string(trim($_POST['email'] ?? ''));
+    $course  = $conn->real_escape_string(trim($_POST['course'] ?? ''));
+    $level   = intval($_POST['year_level'] ?? 1);
     $newpw   = trim($_POST['password'] ?? '');
     $img_sql = "";
 
     if (!empty($_FILES['profile_pic']['name'])) {
         $target_dir = "uploads/";
         if (!is_dir($target_dir)) mkdir($target_dir, 0777, true);
+
         $ext          = pathinfo($_FILES["profile_pic"]["name"], PATHINFO_EXTENSION);
         $new_filename = "user_" . $id_number . "_" . time() . "." . $ext;
+
         if (move_uploaded_file($_FILES["profile_pic"]["tmp_name"], $target_dir . $new_filename)) {
             $img_sql = ", profile_pic = '$new_filename'";
         }
@@ -43,90 +45,125 @@ if (isset($_POST['update_profile'])) {
     $profile_success = "Profile updated successfully.";
 }
 
-// ── Handle Reservation ───────────────────────────────────────────────
+/* ── Handle Reservation ───────────────────────────────────────────── */
 if (isset($_POST['submit_reservation'])) {
-    $purpose  = $conn->real_escape_string(trim($_POST['res_purpose']));
-    $lab      = $conn->real_escape_string(trim($_POST['res_lab']));
-    $time_slot = $conn->real_escape_string(trim($_POST['res_time_slot']));
-    $date     = $conn->real_escape_string(trim($_POST['res_date']));
-    $pc_number = intval($_POST['res_pc'] ?? 0);
+    $res_setting = $conn->query("SELECT value FROM system_settings WHERE setting_key = 'reservations_enabled'")->fetch_assoc();
+    $res_enabled = !$res_setting || $res_setting['value'] !== '0';
 
-    // Check if PC is available
-    $pc_check = $conn->query("SELECT status FROM pc_status WHERE lab_name = '$lab' AND pc_number = $pc_number");
-    $pc_status = $pc_check->fetch_assoc();
-    
-    if (!$pc_status || $pc_status['status'] !== 'available') {
-        $res_error = "Selected PC is not available.";
+    if (!$res_enabled) {
+        $res_error = "Reservations are currently disabled by the administrator.";
     } else {
-        // Check if time slot is already booked for this PC
-        $slot_check = $conn->query("SELECT id FROM reservations WHERE lab='$lab' AND reservation_date='$date' AND preferred_time='$time_slot' AND seat_number=$pc_number AND status IN ('Pending','Approved')");
-        if ($slot_check && $slot_check->num_rows > 0) {
-            $res_error = "This PC is already booked for the selected time slot.";
+        $purpose   = $conn->real_escape_string(trim($_POST['res_purpose'] ?? ''));
+        $lab       = $conn->real_escape_string(trim($_POST['res_lab'] ?? ''));
+        $time_slot = $conn->real_escape_string(trim($_POST['res_time_slot'] ?? ''));
+        $date      = $conn->real_escape_string(trim($_POST['res_date'] ?? ''));
+        $pc_number = intval($_POST['res_pc'] ?? 0);
+
+        $pc_check  = $conn->query("SELECT status FROM pc_status WHERE lab_name = '$lab' AND pc_number = $pc_number");
+        $pc_status = $pc_check ? $pc_check->fetch_assoc() : null;
+
+        if (!$pc_status || $pc_status['status'] !== 'available') {
+            $res_error = "Selected PC is not available.";
         } else {
-            $dup = $conn->query("SELECT id FROM sitin_records WHERE id_number='$id_number' AND login_time LIKE '$date%' AND logout_time IS NULL");
-            if ($dup && $dup->num_rows > 0) {
-                $res_error = "You already have an active sit-in on that date.";
+            $slot_check = $conn->query("SELECT id FROM reservations WHERE lab='$lab' AND reservation_date='$date' AND preferred_time='$time_slot' AND seat_number=$pc_number AND status IN ('Pending','Approved')");
+            if ($slot_check && $slot_check->num_rows > 0) {
+                $res_error = "This PC is already booked for the selected time slot.";
             } else {
-                $conn->query("INSERT INTO reservations (id_number, purpose, lab, preferred_time, reservation_date, status, seat_number, created_at)
-                              VALUES ('$id_number','$purpose','$lab','$time_slot','$date','Pending',$pc_number,NOW())");
-                $res_success = "Reservation submitted! PC #$pc_number reserved for $time_slot.";
+                $dup = $conn->query("SELECT id FROM sitin_records WHERE id_number='$id_number' AND login_time LIKE '$date%' AND logout_time IS NULL");
+                if ($dup && $dup->num_rows > 0) {
+                    $res_error = "You already have an active sit-in on that date.";
+                } else {
+                    $conn->query("INSERT INTO reservations (id_number, purpose, lab, preferred_time, reservation_date, status, seat_number, created_at)
+                                  VALUES ('$id_number','$purpose','$lab','$time_slot','$date','Pending',$pc_number,NOW())");
+
+                    $_SESSION['success'] = "Reservation submitted successfully! PC #$pc_number reserved for $time_slot.";
+                    header("Location: student_dashboard.php");
+                    exit();
+                }
             }
         }
     }
 }
 
-// ── Cancel Reservation ───────────────────────────────────────────────
+/* ── Cancel Reservation ───────────────────────────────────────────── */
 if (isset($_POST['cancel_reservation'])) {
-    $rid = intval($_POST['res_id']);
+    $rid = intval($_POST['res_id'] ?? 0);
     $conn->query("DELETE FROM reservations WHERE id=$rid AND id_number='$id_number'");
     $res_success = "Reservation cancelled.";
 }
 
-// ── Fetch user ───────────────────────────────────────────────────────
+/* ── Fetch user ────────────────────────────────────────────────────── */
 $stmt = $conn->prepare("SELECT * FROM users WHERE id_number = ?");
 $stmt->bind_param("s", $id_number);
 $stmt->execute();
 $user = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
-if (!$user) { echo "User not found."; exit; }
+if (!$user) {
+    echo "User not found.";
+    exit;
+}
 
 $profile_pic = !empty($user['profile_pic'])
     ? "uploads/" . $user['profile_pic']
-    : 'https://ui-avatars.com/api/?name=' . urlencode($user['first_name'].'+'.($user['last_name']??'')) . '&background=9757d6&color=fff&size=150';
+    : 'https://ui-avatars.com/api/?name=' . urlencode($user['first_name'] . ' ' . ($user['last_name'] ?? '')) . '&background=9757d6&color=fff&size=150';
 
-// ── Session credits ──────────────────────────────────────────────────
+/* ── Session credits ───────────────────────────────────────────────── */
 $rem             = intval($user['remaining_session'] ?? 30);
 $max_credits     = 30;
 $used_sessions   = $max_credits - $rem;
-$credits_percent = round(($rem / $max_credits) * 100);
+$credits_percent = $max_credits > 0 ? round(($rem / $max_credits) * 100) : 0;
 $credits_color   = $rem > 15 ? '#27ae60' : ($rem > 5 ? '#f39c12' : '#e74c3c');
 
-// ── Fetch announcements ──────────────────────────────────────────────
+/* ── Sit-in Summary Stats ──────────────────────────────────────────── */
+$summary = $conn->query("
+    SELECT
+        COUNT(*) as total_sessions,
+        SUM(TIMESTAMPDIFF(MINUTE, login_time, IFNULL(logout_time, NOW()))) as total_minutes,
+        AVG(TIMESTAMPDIFF(MINUTE, login_time, IFNULL(logout_time, NOW()))) as avg_minutes,
+        MAX(TIMESTAMPDIFF(MINUTE, login_time, IFNULL(logout_time, NOW()))) as longest_minutes
+    FROM sitin_records
+    WHERE id_number = '$id_number'
+")->fetch_assoc();
+
+$total_sessions  = intval($summary['total_sessions'] ?? 0);
+$total_hours     = !empty($summary['total_minutes']) ? round($summary['total_minutes'] / 60, 1) : 0;
+$avg_duration    = !empty($summary['avg_minutes']) ? round($summary['avg_minutes']) : 0;
+$longest_session = !empty($summary['longest_minutes']) ? round($summary['longest_minutes'] / 60, 1) : 0;
+
+/* ── Software availability ────────────────────────────────────────── */
+$software_table_exists = $conn->query("SHOW TABLES LIKE 'lab_software'")->num_rows > 0;
+
+/* ── Reservation toggle setting ───────────────────────────────────── */
+$settings_table_exists = $conn->query("SHOW TABLES LIKE 'system_settings'")->num_rows > 0;
+$reservations_enabled  = true;
+if ($settings_table_exists) {
+    $res_setting = $conn->query("SELECT value FROM system_settings WHERE setting_key = 'reservations_enabled'")->fetch_assoc();
+    if ($res_setting) $reservations_enabled = ($res_setting['value'] !== '0');
+}
+
+/* ── Fetch announcements ──────────────────────────────────────────── */
 $announcements = $conn->query("SELECT * FROM announcements ORDER BY created_at DESC");
 
-// ── Fetch sit-in history ─────────────────────────────────────────────
+/* ── Fetch sit-in history ─────────────────────────────────────────── */
 $stmt2 = $conn->prepare("SELECT * FROM sitin_records WHERE id_number = ? ORDER BY login_time DESC");
 $stmt2->bind_param("s", $id_number);
 $stmt2->execute();
 $sessions = $stmt2->get_result();
 $stmt2->close();
 
-// ── Fetch reservations ───────────────────────────────────────────────
+/* ── Fetch reservations ───────────────────────────────────────────── */
 $res_table_exists = $conn->query("SHOW TABLES LIKE 'reservations'")->num_rows > 0;
 $reservations = null;
 if ($res_table_exists) {
     $stmt3 = $conn->prepare("SELECT * FROM reservations WHERE id_number = ? ORDER BY reservation_date DESC");
-    if (!$stmt3) {
-        die("Prepare failed: " . $conn->error);
-    }
     $stmt3->bind_param("s", $id_number);
     $stmt3->execute();
     $reservations = $stmt3->get_result();
     $stmt3->close();
 }
 
-// ── Fetch occupied PCs per lab/date/time ─────────────────────────────
+/* ── Fetch occupied PCs ────────────────────────────────────────────── */
 $occupied_pcs = [];
 if ($res_table_exists) {
     $oq = $conn->query("SELECT lab, reservation_date, preferred_time, seat_number FROM reservations WHERE status IN ('Pending','Approved') AND seat_number IS NOT NULL AND seat_number > 0");
@@ -137,10 +174,11 @@ if ($res_table_exists) {
     }
 }
 
-// ── Submit Feedback ──────────────────────────────────────────────────
+/* ── Submit Feedback ──────────────────────────────────────────────── */
 if (isset($_POST['submit_feedback'])) {
-    $sitin_id = intval($_POST['sitin_id']);
-    $message  = $conn->real_escape_string(trim($_POST['feedback_message']));
+    $sitin_id = intval($_POST['sitin_id'] ?? 0);
+    $message  = $conn->real_escape_string(trim($_POST['feedback_message'] ?? ''));
+
     if ($message !== '') {
         $existing = $conn->query("SELECT id FROM feedback WHERE sitin_id = $sitin_id AND id_number = '$id_number'");
         if ($existing && $existing->num_rows === 0) {
@@ -152,7 +190,6 @@ if (isset($_POST['submit_feedback'])) {
     }
 }
 
-// Define time slots
 $time_slots = [
     '7:00 AM - 9:00 AM',
     '9:00 AM - 11:00 AM',
@@ -161,7 +198,6 @@ $time_slots = [
     '3:00 PM - 5:00 PM'
 ];
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -171,7 +207,7 @@ $time_slots = [
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
-
+    <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
     <style>
         :root {
             --uc-blue: #a1cbf7;
@@ -180,338 +216,238 @@ $time_slots = [
         }
         * { box-sizing: border-box; }
         body { font-family: 'Poppins', sans-serif; background-color: #f4f7f6; margin: 0; overflow-x: hidden; }
-
-        /* ── Navbar ── */
-        .navbar { 
-            background-color: var(--uc-blue); 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
-            padding: 8px 20px; 
-            position: sticky; 
-            top: 0; 
-            z-index: 100; 
+        .navbar {
+            background: linear-gradient(160deg, var(--ccs-purple) 0%, #6a3fa0 50%, #2e6da4 100%);
+            box-shadow: 0 4px 20px rgba(151,87,214,0.25);
+            padding: 8px 20px;
+            position: sticky; top: 0; z-index: 100;
         }
-        .navbar-brand { 
-            font-weight: 300; 
-            color: white !important; 
-            font-size: 0.9rem; 
-            letter-spacing: 0.3px; 
+        .navbar-brand { font-weight: 700; color: white !important; font-size: 0.95rem; }
+        .nav-action-btn {
+            display: flex; align-items: center; gap: 5px;
+            color: rgba(255,255,255,0.8) !important;
+            font-weight: 600; font-size: 0.78rem; border-radius: 8px;
+            padding: 6px 10px !important; transition: all 0.2s; text-decoration: none;
         }
-        .nav-action-btn { 
-            display: flex; 
-            align-items: center; 
-            gap: 5px; 
-            color: rgba(30,80,120,0.9) !important; 
-            font-weight: 600; font-size: 0.78rem; border-radius: 8px; padding: 6px 10px !important; transition: background 0.2s, color 0.2s; text-decoration: none; white-space: nowrap; border: 1.5px solid transparent; }
-        .nav-action-btn i { font-size: 1rem; }
-        .nav-action-btn:hover { background: rgba(255,255,255,0.4); color: #1a3e6e !important; border-color: rgba(255,255,255,0.5); }
-        .nav-action-btn.purple i { color: var(--ccs-purple); }
-        .nav-action-btn.orange i { color: #d35400; }
-        .nav-action-btn.blue   i { color: #1a6fad; }
-        .nav-action-btn.green  i { color: #1e8449; }
-        .nav-divider { width: 1px; height: 22px; background: rgba(255,255,255,0.45); margin: 0 2px; }
-        .btn-logout-nav { background-color: var(--ccs-gold); color: #333 !important; font-weight: 700; border: none; border-radius: 8px; padding: 6px 14px; font-size: 0.8rem; text-decoration: none; transition: background 0.2s; white-space: nowrap; }
-        .btn-logout-nav:hover { background-color: #e6c200; color: #222 !important; }
-        .nav-welcome { color: rgba(30,80,120,0.85); font-size: 0.8rem; font-weight: 500; white-space: nowrap; }
-        .navbar-toggler { border: none; background: rgba(255,255,255,0.3); border-radius: 8px; padding: 4px 8px; }
-        .navbar-toggler-icon { background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(30,80,120,0.9)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e"); }
+        .nav-action-btn:hover { background: rgba(255,255,255,0.12); color: white !important; }
+        .nav-divider { width: 1px; height: 22px; background: rgba(255,255,255,0.25); margin: 0 2px; }
+        .btn-logout-nav {
+            background: rgba(255,215,0,0.15); border: 1px solid rgba(255,215,0,0.35);
+            color: var(--ccs-gold) !important; padding: 6px 14px; border-radius: 8px;
+            font-size: 0.8rem; font-weight: 700; text-decoration: none; transition: all 0.2s;
+        }
+        .btn-logout-nav:hover { background: var(--ccs-gold); color: #333 !important; }
+        .nav-welcome { color: rgba(255,255,255,0.75); font-size: 0.8rem; font-weight: 500; }
 
-        /* ── Hero ── */
-        .hero-section { background: linear-gradient(135deg, var(--ccs-purple) 0%, var(--uc-blue) 100%); color: white; padding: 40px 20px 70px; border-bottom-left-radius: 35px; border-bottom-right-radius: 35px; text-align: center; }
-        .hero-section h2 { font-weight: 800; font-size: 1.6rem; text-transform: uppercase; margin-bottom: 4px; }
-        .hero-section p { opacity: 0.8; font-size: 0.88rem; margin: 0; }
-        .main-wrapper { margin-top: -40px; padding: 0 20px 40px; }
+        .hero-section {
+            background: linear-gradient(135deg, var(--ccs-purple) 0%, var(--uc-blue) 100%);
+            color: white; padding: 32px 20px 60px;
+            border-bottom-left-radius: 35px; border-bottom-right-radius: 35px; text-align: center;
+        }
+        .hero-section h2 { font-weight: 800; font-size: 1.5rem; text-transform: uppercase; margin-bottom: 4px; }
+        .hero-section p { opacity: 0.8; font-size: 0.85rem; margin: 0; }
+        .main-wrapper { margin-top: -36px; padding: 0 20px 40px; }
 
-        /* ── Cards ── */
-        .dash-card { background: white; border-radius: 18px; box-shadow: 0 6px 24px rgba(151,87,214,0.08); border: 1px solid rgba(0,0,0,0.04); overflow: hidden; margin-bottom: 20px; }
+        .dash-card {
+            background: white; border-radius: 18px;
+            box-shadow: 0 6px 24px rgba(151,87,214,0.08);
+            border: 1px solid rgba(0,0,0,0.04); overflow: hidden; margin-bottom: 20px;
+        }
         .card-header-purple { background: linear-gradient(135deg, var(--ccs-purple), #7c45b8); color: white; font-weight: 600; font-size: 0.88rem; padding: 11px 18px; }
-        .card-header-gold { background: var(--ccs-gold); color: #4a3800; font-weight: 700; font-size: 0.88rem; padding: 11px 18px; }
-        .card-header-blue { background: linear-gradient(135deg, #3a9bd5, #5ab4f0); color: white; font-weight: 600; font-size: 0.88rem; padding: 11px 18px; }
-        .avatar-wrap { position: relative; width: 100px; height: 100px; margin: 0 auto 12px; }
-        .avatar-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 4px solid white; box-shadow: 0 4px 14px rgba(151,87,214,0.25); }
-        .info-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 7px 0; border-bottom: 1px solid #f5f5f5; font-size: 0.84rem; gap: 8px; }
+        .card-header-gold   { background: var(--ccs-gold); color: #4a3800; font-weight: 700; font-size: 0.88rem; padding: 11px 18px; }
+        .card-header-blue   { background: linear-gradient(135deg, #3a9bd5, #5ab4f0); color: white; font-weight: 600; font-size: 0.88rem; padding: 11px 18px; }
+
+        .avatar-wrap { position: relative; width: 90px; height: 90px; margin: 0 auto 10px; }
+        .avatar-img  { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 4px solid white; box-shadow: 0 4px 14px rgba(151,87,214,0.25); }
+
+        .info-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid #f5f5f5; font-size: 0.82rem; gap: 8px; }
         .info-row:last-child { border-bottom: none; }
         .info-label { color: #aaa; white-space: nowrap; }
         .info-value { font-weight: 600; color: #333; text-align: right; word-break: break-word; }
-        .credits-box { background: linear-gradient(135deg, #f8f1fe, #eef6ff); border-radius: 12px; padding: 14px 16px; margin: 14px 0; border: 1px solid rgba(151,87,214,0.1); }
-        .credits-title { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ccs-purple); font-weight: 700; margin-bottom: 8px; }
-        .credits-nums { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 8px; }
-        .credits-big { font-size: 1.8rem; font-weight: 800; line-height: 1; }
-        .credits-sub { font-size: 0.72rem; color: #aaa; }
-        .credits-bar { height: 8px; border-radius: 4px; background: #e8e0f0; overflow: hidden; }
-        .credits-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
-        .rules-list { padding-left: 1.2rem; margin: 0; }
-        .rules-list li { padding: 5px 0; border-bottom: 1px solid #f5f5f5; font-size: 0.84rem; color: #444; }
-        .rules-list li:last-child { border-bottom: none; }
-        .rules-list li::marker { color: var(--ccs-purple); }
-        .ann-item { padding: 12px 0; border-bottom: 1px solid #f0f0f0; }
-        .ann-item:last-child { border-bottom: none; }
-        .ann-item .ann-admin { font-size: 0.78rem; font-weight: 700; color: var(--ccs-purple); margin-bottom: 3px; }
-        .ann-item .ann-text { font-size: 0.84rem; color: #444; margin: 0; }
-        .table thead th { background: linear-gradient(135deg, var(--ccs-purple), #7c45b8); color: white; font-size: 0.8rem; font-weight: 600; border: none; padding: 9px 12px; }
-        .table tbody td { font-size: 0.82rem; vertical-align: middle; padding: 8px 12px; }
+
+        .credits-box { background: linear-gradient(135deg,#f8f1fe,#eef6ff); border-radius: 12px; padding: 12px 14px; margin: 12px 0; border: 1px solid rgba(151,87,214,0.1); }
+        .credits-title { font-size: 0.67rem; text-transform: uppercase; letter-spacing: .08em; color: var(--ccs-purple); font-weight: 700; margin-bottom: 7px; }
+        .credits-nums { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 7px; }
+        .credits-big { font-size: 1.7rem; font-weight: 800; line-height: 1; }
+        .credits-sub { font-size: 0.7rem; color: #aaa; }
+        .credits-bar { height: 7px; border-radius: 4px; background: #e8e0f0; overflow: hidden; }
+        .credits-fill { height: 100%; border-radius: 4px; transition: width .5s ease; }
+
+        .summary-stat {
+            background: linear-gradient(135deg,#f8f1fe,#eef6ff);
+            border-radius: 12px; padding: 10px 12px; text-align: center;
+            border: 1px solid rgba(151,87,214,0.12);
+        }
+        .summary-stat .s-num { font-size: 1.4rem; font-weight: 800; color: var(--ccs-purple); line-height: 1; }
+        .summary-stat .s-lbl { font-size: 0.67rem; color: #aaa; margin-top: 3px; }
+
+        .table thead th { background: linear-gradient(135deg, var(--ccs-purple), #7c45b8); color: white; font-size: 0.78rem; font-weight: 600; border: none; padding: 9px 10px; }
+        .table tbody td { font-size: 0.8rem; vertical-align: middle; padding: 7px 10px; }
         .table tbody tr:hover { background: #f8f1fe; }
         .table { margin-bottom: 0; }
-        .badge-active    { background: #27ae60; color: white; padding: 3px 9px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
-        .badge-done      { background: #bdc3c7; color: #555;  padding: 3px 9px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
-        .badge-pending   { background: #f39c12; color: white; padding: 3px 9px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
-        .badge-approved  { background: #27ae60; color: white; padding: 3px 9px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
-        .badge-cancelled { background: #95a5a6; color: white; padding: 3px 9px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
 
-        /* ── Modals ── */
-        .modal-header-purple { background: linear-gradient(135deg, var(--ccs-purple), #7c45b8); color: white; border-radius: 16px 16px 0 0; padding: 14px 20px; }
+        .badge-active    { background:#27ae60; color:white; padding:2px 8px; border-radius:20px; font-size:0.7rem; font-weight:600; }
+        .badge-done      { background:#bdc3c7; color:#555; padding:2px 8px; border-radius:20px; font-size:0.7rem; font-weight:600; }
+        .badge-pending   { background:#f39c12; color:white; padding:2px 8px; border-radius:20px; font-size:0.7rem; font-weight:600; }
+        .badge-approved  { background:#27ae60; color:white; padding:2px 8px; border-radius:20px; font-size:0.7rem; font-weight:600; }
+        .badge-cancelled { background:#95a5a6; color:white; padding:2px 8px; border-radius:20px; font-size:0.7rem; font-weight:600; }
+
+        .modal-header-purple { background: linear-gradient(135deg,var(--ccs-purple),#7c45b8); color:white; border-radius:16px 16px 0 0; padding:14px 20px; }
         .modal-header-purple .btn-close { filter: invert(1); }
         .modal-content { border-radius: 16px; border: none; box-shadow: 0 20px 60px rgba(151,87,214,0.2); }
         .form-control:focus, .form-select:focus { border-color: var(--ccs-purple); box-shadow: 0 0 0 3px rgba(151,87,214,0.12); }
-        .form-control, .form-select { border-radius: 8px; font-size: 0.85rem; }
-        .field-label { font-size: 0.75rem; color: #888; font-weight: 500; margin-bottom: 3px; }
-        .btn-purple { background: linear-gradient(135deg, var(--ccs-purple), #7c45b8); color: white; border: none; border-radius: 8px; font-weight: 600; font-size: 0.85rem; transition: opacity 0.2s; }
-        .btn-purple:hover { opacity: 0.88; color: white; }
-        .res-form-box { background: linear-gradient(135deg, #f8f1fe, #eef6ff); border-radius: 12px; padding: 1.2rem; margin-bottom: 1.2rem; border: 1px solid rgba(151,87,214,0.12); }
-        .res-form-box .res-title { font-size: 0.68rem; color: var(--ccs-purple); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
+        .btn-purple { background: linear-gradient(135deg,var(--ccs-purple),#7c45b8); color:white; border:none; border-radius:8px; font-weight:600; font-size:0.85rem; transition:opacity .2s; }
+        .btn-purple:hover { opacity:.88; color:white; }
+        .field-label { font-size:.75rem; color:#888; font-weight:500; margin-bottom:3px; }
 
-        footer { padding: 24px 0; text-align: center; color: #bbb; font-size: 0.78rem; }
+        .ann-item { padding: 11px 0; border-bottom: 1px solid #f0f0f0; }
+        .ann-item:last-child { border-bottom: none; }
+        .ann-item .ann-admin { font-size: 0.77rem; font-weight: 700; color: var(--ccs-purple); margin-bottom: 2px; }
+        .ann-item .ann-text  { font-size: 0.82rem; color: #444; margin: 0; }
 
-        /* ════ SEAT PLAN (PC SELECTION) ════ */
-        #pcSelectionModal .modal-dialog { max-width: 800px; }
-        #pcSelectionModal .modal-content { border-radius: 20px; overflow: hidden; border: none; }
+        .rules-list { padding-left: 1.2rem; margin: 0; }
+        .rules-list li { padding: 5px 0; border-bottom: 1px solid #f5f5f5; font-size: 0.82rem; color: #444; }
+        .rules-list li:last-child { border-bottom: none; }
 
-        .pc-selection-header {
-            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-            color: white;
-            padding: 18px 24px;
+        .res-form-box { background: linear-gradient(135deg,#f8f1fe,#eef6ff); border-radius:12px; padding:1.1rem; margin-bottom:1.1rem; border:1px solid rgba(151,87,214,0.12); }
+        .res-form-box .res-title { font-size:.67rem; color:var(--ccs-purple); font-weight:700; text-transform:uppercase; letter-spacing:.08em; margin-bottom:10px; }
+        .time-slot-option { flex:1; min-width:110px; }
+        .time-slot-option input[type="radio"] { display:none; }
+        .time-slot-option label { display:block; padding:8px 10px; background:#f8f9fa; border:2px solid #e0e0e0; border-radius:10px; text-align:center; cursor:pointer; transition:all .25s; font-size:0.78rem; font-weight:600; color:#666; }
+        .time-slot-option input[type="radio"]:checked + label { background:linear-gradient(135deg,var(--ccs-purple),#7c45b8); border-color:var(--ccs-gold); color:white; box-shadow:0 4px 12px rgba(151,87,214,0.3); }
+        .time-slot-option label:hover { border-color:var(--ccs-purple); background:#f3e9fd; }
+
+        .pc-card-sel { aspect-ratio:1; border-radius:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:0.68rem; font-weight:700; cursor:pointer; border:2px solid transparent; transition:all .2s; }
+        .pc-card-sel i { font-size:.95rem; margin-bottom:2px; }
+        .pc-card-sel.available    { background:linear-gradient(145deg,#d5f5e3,#a9dfbf); color:#1a6835; border-color:#82c99a; }
+        .pc-card-sel.available:hover { transform:scale(1.06); box-shadow:0 4px 12px rgba(39,174,96,.3); }
+        .pc-card-sel.occupied     { background:linear-gradient(145deg,#fadbd8,#f1948a); color:#7b241c; border-color:#e57373; cursor:not-allowed; opacity:.7; }
+        .pc-card-sel.maintenance  { background:linear-gradient(145deg,#fdebd0,#f8c471); color:#784212; border-color:#f39c12; cursor:not-allowed; }
+        .pc-card-sel.selected     { background:linear-gradient(145deg,var(--ccs-purple),#7c45b8); color:white; border-color:var(--ccs-gold); box-shadow:0 4px 14px rgba(151,87,214,.5); }
+        .legend-dot { width:12px; height:12px; border-radius:3px; display:inline-block; margin-right:4px; vertical-align:middle; }
+
+        .software-badge { display:inline-block; padding:3px 10px; border-radius:20px; font-size:0.72rem; font-weight:700; }
+        .sw-available { background:#d5f5e3; color:#1a6835; }
+        .sw-unavailable { background:#fadbd8; color:#7b241c; }
+
+        .res-disabled-banner { background:linear-gradient(135deg,#fadbd8,#f1948a); color:#7b241c; border-radius:12px; padding:12px 16px; font-weight:600; font-size:0.85rem; border:1px solid #e57373; }
+
+        .sitin-summary-section { padding: 0 20px 40px; }
+        .sitin-summary-section .section-divider {
+            display: flex; align-items: center; gap: 14px; margin-bottom: 20px;
         }
-        .pc-selection-header .lab-chip {
-            background: rgba(255,215,0,0.2);
-            border: 1px solid rgba(255,215,0,0.5);
-            color: #FFD700;
-            border-radius: 20px;
-            padding: 3px 14px;
-            font-size: 0.78rem;
-            font-weight: 700;
-            letter-spacing: 0.06em;
-        }
-
-        .pc-legend {
-            display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
-            padding: 10px 20px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #eee;
-            font-size: 0.77rem; color: #555;
-        }
-        .legend-dot { width: 13px; height: 13px; border-radius: 3px; display: inline-block; margin-right: 4px; vertical-align: middle; }
-        .legend-available { background: #27ae60; }
-        .legend-occupied { background: #e74c3c; }
-        .legend-maintenance { background: #f39c12; }
-        .legend-selected { background: #9757d6; }
-
-        .pc-room-wrapper { padding: 18px 20px 10px; background: #fff; }
-
-        .front-board {
-            background: linear-gradient(90deg, #1a1a2e, #2c3e6b);
-            color: #a1cbf7;
-            text-align: center;
-            padding: 8px 20px;
-            border-radius: 10px;
-            font-size: 0.7rem;
-            font-weight: 700;
-            letter-spacing: 0.15em;
-            text-transform: uppercase;
-            margin-bottom: 20px;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.15);
-        }
-
-        .pc-grid {
-            display: grid;
-            grid-template-columns: repeat(10, 1fr);
-            gap: 8px;
-        }
-
-        .pc-card {
-            aspect-ratio: 1;
-            border-radius: 10px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.7rem;
-            font-weight: 700;
-            cursor: pointer;
-            border: 2px solid transparent;
-            transition: all 0.2s ease;
-            position: relative;
-            background: #f0f0f0;
-        }
-        .pc-card i { font-size: 1.1rem; margin-bottom: 4px; }
-
-        .pc-card.available {
-            background: linear-gradient(145deg, #d5f5e3, #a9dfbf);
-            color: #1a6835;
-            border-color: #82c99a;
-        }
-        .pc-card.available:hover {
-            transform: scale(1.05);
-            box-shadow: 0 5px 16px rgba(39,174,96,0.3);
-            border-color: #27ae60;
-        }
-
-        .pc-card.occupied {
-            background: linear-gradient(145deg, #fadbd8, #f1948a);
-            color: #7b241c;
-            border-color: #e57373;
-            cursor: not-allowed;
-            opacity: 0.7;
-        }
-
-        .pc-card.maintenance {
-            background: linear-gradient(145deg, #fdebd0, #f8c471);
-            color: #784212;
-            border-color: #f39c12;
-            cursor: not-allowed;
-        }
-
-        .pc-card.selected {
-            background: linear-gradient(145deg, var(--ccs-purple), #7c45b8);
-            color: white;
-            border-color: var(--ccs-gold);
-            transform: scale(1.05);
-            box-shadow: 0 5px 16px rgba(151,87,214,0.5);
-        }
-
-        .pc-selection-footer {
-            padding: 12px 20px 16px;
-            background: #fafafa;
-            border-top: 1px solid #f0f0f0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .selected-pc-display {
-            background: linear-gradient(135deg, #f3e9fd, #e8f0fe);
-            border: 2px solid var(--ccs-purple);
-            border-radius: 10px;
-            padding: 10px 15px;
-            font-size: 0.85rem;
-            font-weight: 700;
-            color: var(--ccs-purple);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .selected-pc-display i { font-size: 1.1rem; }
-
-        /* Time slot styles */
-        .time-slot-group {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-            margin-top: 5px;
-        }
-        .time-slot-option {
+        .sitin-summary-section .section-divider::before,
+        .sitin-summary-section .section-divider::after {
+            content: '';
             flex: 1;
-            min-width: 120px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(151,87,214,0.25), transparent);
         }
-        .time-slot-option input[type="radio"] {
-            display: none;
-        }
-        .time-slot-option label {
-            display: block;
-            padding: 10px 12px;
-            background: #f8f9fa;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 0.85rem;
-            font-weight: 600;
-            color: #666;
-        }
-        .time-slot-option input[type="radio"]:checked + label {
-            background: linear-gradient(135deg, var(--ccs-purple), #7c45b8);
-            border-color: var(--ccs-gold);
-            color: white;
-            transform: scale(1.02);
-            box-shadow: 0 4px 12px rgba(151,87,214,0.3);
-        }
-        .time-slot-option label:hover {
-            border-color: var(--ccs-purple);
-            background: #f3e9fd;
-        }
-                /* PC Alert Styles */
-        #pcAlertArea .alert-warning {
-            background: linear-gradient(135deg, #fff3e0, #ffe0b2);
-            border: none;
-            color: #e65100;
-        }
-        #pcAlertArea .alert-success {
-            background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
-            border: none;
-            color: #2e7d32;
-        }
-        .text-purple {
+        .sitin-summary-section .section-divider span {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
             color: var(--ccs-purple);
+            white-space: nowrap;
         }
+
+        .scroll-hint {
+            margin-top: 18px;
+            animation: bounce 2s infinite;
+            opacity: 0.7;
+            font-size: 0.75rem;
+            color: white;
+        }
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(6px); }
+        }
+
+        footer { padding:24px 0; text-align:center; color:#bbb; font-size:0.78rem; }
     </style>
 </head>
 <body>
 
-<!-- ── Navbar ── -->
 <nav class="navbar navbar-expand-lg">
     <div class="container-fluid">
         <a class="navbar-brand" href="#"><i class="bi bi-pc-display-horizontal me-2"></i>CCS Sit-in Monitoring</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMenu">
-            <span class="navbar-toggler-icon"></span>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMenu"
+            style="border:none;background:rgba(255,255,255,0.15);border-radius:8px;padding:4px 8px;">
+            <span class="navbar-toggler-icon" style="background-image:url(&quot;data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='white' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e&quot;);"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarMenu">
             <div class="d-flex align-items-center gap-1 ms-auto flex-wrap py-1 py-lg-0">
-                <a href="#" class="nav-action-btn purple" data-bs-toggle="modal" data-bs-target="#editProfileModal"><i class="bi bi-pencil-square"></i><span>Edit Profile</span></a>
+                <a href="#" class="nav-action-btn" data-bs-toggle="modal" data-bs-target="#editProfileModal"><i class="bi bi-pencil-square"></i><span>Edit Profile</span></a>
                 <div class="nav-divider d-none d-lg-block"></div>
-                <a href="#" class="nav-action-btn orange" data-bs-toggle="modal" data-bs-target="#notifModal"><i class="bi bi-bell-fill"></i><span>Notifications</span></a>
+                <a href="#" class="nav-action-btn" data-bs-toggle="modal" data-bs-target="#notifModal"><i class="bi bi-bell-fill"></i><span>Notifications</span></a>
                 <div class="nav-divider d-none d-lg-block"></div>
-                <a href="#" class="nav-action-btn blue" data-bs-toggle="modal" data-bs-target="#historyModal"><i class="bi bi-clock-history"></i><span>History</span></a>
+                <a href="#" class="nav-action-btn" data-bs-toggle="modal" data-bs-target="#historyModal"><i class="bi bi-clock-history"></i><span>History</span></a>
                 <div class="nav-divider d-none d-lg-block"></div>
-                <a href="#" class="nav-action-btn green" data-bs-toggle="modal" data-bs-target="#reservationModal"><i class="bi bi-calendar-check-fill"></i><span>Reservation</span></a>
+                <a href="#" class="nav-action-btn" data-bs-toggle="modal" data-bs-target="#softwareModal"><i class="bi bi-app-indicator"></i><span>Lab Software</span></a>
                 <div class="nav-divider d-none d-lg-block"></div>
-                <span class="nav-welcome ms-1">Welcome, <strong><?= htmlspecialchars($user['first_name']) ?></strong></span>
+                <?php if ($reservations_enabled): ?>
+                    <a href="#" class="nav-action-btn" data-bs-toggle="modal" data-bs-target="#reservationModal"><i class="bi bi-calendar-check-fill"></i><span>Reservation</span></a>
+                <?php else: ?>
+                    <span class="nav-action-btn" style="opacity:.5;cursor:not-allowed;" title="Reservations are disabled"><i class="bi bi-calendar-x-fill"></i><span>Reservation</span></span>
+                <?php endif; ?>
+                <div class="nav-divider d-none d-lg-block"></div>
+                <span class="nav-welcome ms-1">Hi, <strong><?= htmlspecialchars($user['first_name']) ?></strong></span>
                 <a href="#" class="btn-logout-nav ms-1" onclick="confirmLogout(event)"><i class="bi bi-box-arrow-right me-1"></i>Log out</a>
             </div>
         </div>
     </div>
 </nav>
 
-<!-- ── Hero ── -->
 <div class="hero-section">
     <h2>Student Dashboard</h2>
     <p>College of Computer Studies · Sit-in Monitoring System</p>
+    <div class="scroll-hint">
+        <i class="bi bi-chevron-double-down d-block mb-1" style="font-size:1rem;"></i>
+        Scroll down for your sit-in summary
+    </div>
 </div>
 
-<!-- ── Main ── -->
 <div class="main-wrapper">
-    <div class="container-fluid px-2 px-md-3">
+    <div class="container-fluid px-0 px-md-2">
+        <?php if (isset($_SESSION['success'])): ?>
+            <div class="alert alert-success alert-dismissible fade show py-2 px-3 mb-3" style="border-radius:10px;font-size:0.85rem;">
+                <i class="bi bi-check-circle-fill me-2"></i><?= htmlspecialchars($_SESSION['success']) ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            <?php unset($_SESSION['success']); ?>
+        <?php endif; ?>
+
         <?php if (isset($profile_success)): ?>
             <div class="alert alert-success alert-dismissible fade show py-2 px-3 mb-3" style="border-radius:10px;font-size:0.85rem;">
                 <i class="bi bi-check-circle-fill me-2"></i><?= htmlspecialchars($profile_success) ?>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         <?php endif; ?>
+
+        <?php if (!$reservations_enabled): ?>
+            <div class="res-disabled-banner mb-3">
+                <i class="bi bi-lock-fill me-2"></i>
+                Reservations are currently <strong>disabled</strong> by the administrator.
+            </div>
+        <?php endif; ?>
+
         <div class="row g-3">
-            <!-- LEFT -->
             <div class="col-lg-3 col-md-4">
                 <div class="dash-card">
                     <div class="card-header-purple"><i class="bi bi-person-fill me-2"></i>Student Information</div>
                     <div class="card-body p-3 text-center">
                         <div class="avatar-wrap">
-                            <img src="<?= $profile_pic ?>" id="avatarPreview" class="avatar-img"
-                                onerror="this.src='https://ui-avatars.com/api/?name=<?= urlencode($user['first_name'].' '.$user['last_name']) ?>&background=9757d6&color=fff&size=150'">
+                            <img src="<?= htmlspecialchars($profile_pic) ?>" id="avatarPreview" class="avatar-img"
+                                 onerror="this.src='https://ui-avatars.com/api/?name=<?= urlencode($user['first_name'].' '.$user['last_name']) ?>&background=9757d6&color=fff&size=150'">
                         </div>
-                        <div style="font-weight:700;font-size:1rem;color:#222;"><?= htmlspecialchars($user['first_name'].' '.$user['last_name']) ?></div>
-                        <div style="font-size:0.75rem;color:#aaa;margin-bottom:12px;"><?= htmlspecialchars($user['course']) ?> &mdash; Year <?= $user['year_level'] ?></div>
-                        <div class="info-row"><span class="info-label"><i class="bi bi-card-text me-1"></i>Name</span><span class="info-value"><?= htmlspecialchars($user['first_name'].' '.$user['last_name']) ?></span></div>
+                        <div style="font-weight:700;font-size:0.95rem;color:#222;"><?= htmlspecialchars($user['first_name'].' '.$user['last_name']) ?></div>
+                        <div style="font-size:0.72rem;color:#aaa;margin-bottom:10px;"><?= htmlspecialchars($user['course']) ?> &mdash; Year <?= htmlspecialchars($user['year_level']) ?></div>
+                        <div class="info-row"><span class="info-label"><i class="bi bi-card-text me-1"></i>ID</span><span class="info-value"><?= htmlspecialchars($user['id_number']) ?></span></div>
                         <div class="info-row"><span class="info-label"><i class="bi bi-book me-1"></i>Course</span><span class="info-value"><?= htmlspecialchars($user['course']) ?></span></div>
-                        <div class="info-row"><span class="info-label"><i class="bi bi-calendar3 me-1"></i>Year</span><span class="info-value">Year <?= $user['year_level'] ?></span></div>
-                        <div class="info-row"><span class="info-label"><i class="bi bi-envelope me-1"></i>Email</span><span class="info-value" style="font-size:0.75rem;"><?= htmlspecialchars($user['email']) ?></span></div>
+                        <div class="info-row"><span class="info-label"><i class="bi bi-calendar3 me-1"></i>Year</span><span class="info-value">Year <?= htmlspecialchars($user['year_level']) ?></span></div>
+                        <div class="info-row"><span class="info-label"><i class="bi bi-envelope me-1"></i>Email</span><span class="info-value" style="font-size:0.72rem;"><?= htmlspecialchars($user['email']) ?></span></div>
+
                         <div class="credits-box">
                             <div class="credits-title"><i class="bi bi-ticket-perforated me-1"></i>Session Credits</div>
                             <div class="credits-nums">
@@ -520,17 +456,22 @@ $time_slots = [
                                     <div class="credits-sub">remaining</div>
                                 </div>
                                 <div class="text-end">
-                                    <div style="font-size:0.72rem;color:#bbb;">Used</div>
-                                    <div style="font-size:0.95rem;font-weight:700;color:#555;"><?= $used_sessions ?> / <?= $max_credits ?></div>
+                                    <div style="font-size:0.7rem;color:#bbb;">Used</div>
+                                    <div style="font-size:0.9rem;font-weight:700;color:#555;"><?= $used_sessions ?> / <?= $max_credits ?></div>
                                 </div>
                             </div>
-                            <div class="credits-bar"><div class="credits-fill" style="width:<?= $credits_percent ?>%;background:<?= $credits_color ?>;"></div></div>
+                            <div class="credits-bar">
+                                <div class="credits-fill" style="width:<?= $credits_percent ?>%;background:<?= $credits_color ?>;"></div>
+                            </div>
                             <?php if ($rem <= 5): ?>
-                                <div style="font-size:0.73rem;color:#e74c3c;margin-top:6px;"><i class="bi bi-exclamation-triangle-fill me-1"></i>Low credits! Contact admin.</div>
+                                <div style="font-size:0.72rem;color:#e74c3c;margin-top:5px;">
+                                    <i class="bi bi-exclamation-triangle-fill me-1"></i>Low credits! Contact admin.
+                                </div>
                             <?php endif; ?>
                         </div>
                     </div>
                 </div>
+
                 <div class="dash-card">
                     <div class="card-header-gold"><i class="bi bi-journal-text me-2"></i>Rules &amp; Regulations</div>
                     <div class="card-body p-3">
@@ -547,42 +488,40 @@ $time_slots = [
                 </div>
             </div>
 
-            <!-- CENTER -->
             <div class="col-lg-5 col-md-8">
                 <div class="dash-card h-100">
-                    <div class="card-header-purple"><i class="bi bi-megaphone-fill me-2"></i>Announcement</div>
+                    <div class="card-header-purple"><i class="bi bi-megaphone-fill me-2"></i>Announcements</div>
                     <div class="card-body p-3">
-                        <?php if ($announcements && $announcements->num_rows > 0):
-                            while ($a = $announcements->fetch_assoc()):
-                                $adate = date('Y-M-d', strtotime($a['created_at'])); ?>
-                            <div class="ann-item">
-                                <div class="ann-admin"><?= htmlspecialchars($a['admin_name']) ?> <span class="text-muted fw-normal">| <?= $adate ?></span></div>
-                                <p class="ann-text"><?= htmlspecialchars($a['message']) ?></p>
-                            </div>
-                        <?php endwhile; else: ?>
+                        <?php if ($announcements && $announcements->num_rows > 0): ?>
+                            <?php while ($a = $announcements->fetch_assoc()): ?>
+                                <div class="ann-item">
+                                    <div class="ann-admin"><?= htmlspecialchars($a['admin_name'] ?? 'Admin') ?></div>
+                                    <p class="ann-text"><?= htmlspecialchars($a['message'] ?? '') ?></p>
+                                </div>
+                            <?php endwhile; ?>
+                        <?php else: ?>
                             <p class="text-muted mb-0" style="font-size:0.85rem;">No announcements yet.</p>
                         <?php endif; ?>
                     </div>
                 </div>
             </div>
 
-            <!-- RIGHT -->
             <div class="col-lg-4 d-none d-lg-block">
                 <div class="dash-card h-100">
                     <div class="card-header-blue"><i class="bi bi-shield-check me-2"></i>Laboratory Rules &amp; Regulations</div>
                     <div class="card-body p-3">
                         <p style="font-weight:700;text-align:center;color:var(--ccs-purple);font-size:0.88rem;">University of Cebu</p>
-                        <p style="font-weight:600;text-align:center;color:#555;font-size:0.78rem;margin-bottom:14px;">COLLEGE OF COMPUTER STUDIES</p>
-                        <p style="font-weight:700;font-size:0.82rem;color:#333;margin-bottom:8px;">LABORATORY RULES AND REGULATIONS</p>
-                        <p style="font-size:0.8rem;color:#555;margin-bottom:8px;">To avoid embarrassment and maintain camaraderie with your friends and superiors at our laboratories, please observe the following:</p>
+                        <p style="font-weight:600;text-align:center;color:#555;font-size:0.78rem;margin-bottom:12px;">COLLEGE OF COMPUTER STUDIES</p>
+                        <p style="font-weight:700;font-size:0.82rem;color:#333;margin-bottom:7px;">LABORATORY RULES AND REGULATIONS</p>
+                        <p style="font-size:0.78rem;color:#555;margin-bottom:8px;">To avoid embarrassment and maintain camaraderie with your friends and superiors at our laboratories, please observe the following:</p>
                         <ol style="padding-left:1.2rem;">
-                            <li style="font-size:0.8rem;color:#444;padding:4px 0;border-bottom:1px solid #f5f5f5;">Maintain silence, proper decorum, and discipline inside the laboratory.</li>
-                            <li style="font-size:0.8rem;color:#444;padding:4px 0;border-bottom:1px solid #f5f5f5;">Games are not allowed inside the lab.</li>
-                            <li style="font-size:0.8rem;color:#444;padding:4px 0;border-bottom:1px solid #f5f5f5;">Surfing the Internet is allowed only with the permission of the instructor.</li>
-                            <li style="font-size:0.8rem;color:#444;padding:4px 0;border-bottom:1px solid #f5f5f5;">Eating, drinking, and smoking are strictly prohibited.</li>
-                            <li style="font-size:0.8rem;color:#444;padding:4px 0;border-bottom:1px solid #f5f5f5;">Observe proper sitting posture at all times.</li>
-                            <li style="font-size:0.8rem;color:#444;padding:4px 0;border-bottom:1px solid #f5f5f5;">Report any damaged equipment to the laboratory attendant.</li>
-                            <li style="font-size:0.8rem;color:#444;padding:4px 0;">Seats are to be arranged neatly after use.</li>
+                            <li style="font-size:0.78rem;color:#444;padding:4px 0;border-bottom:1px solid #f5f5f5;">Maintain silence, proper decorum, and discipline inside the laboratory.</li>
+                            <li style="font-size:0.78rem;color:#444;padding:4px 0;border-bottom:1px solid #f5f5f5;">Games are not allowed inside the lab.</li>
+                            <li style="font-size:0.78rem;color:#444;padding:4px 0;border-bottom:1px solid #f5f5f5;">Surfing the Internet is allowed only with the permission of the instructor.</li>
+                            <li style="font-size:0.78rem;color:#444;padding:4px 0;border-bottom:1px solid #f5f5f5;">Eating, drinking, and smoking are strictly prohibited.</li>
+                            <li style="font-size:0.78rem;color:#444;padding:4px 0;border-bottom:1px solid #f5f5f5;">Observe proper sitting posture at all times.</li>
+                            <li style="font-size:0.78rem;color:#444;padding:4px 0;border-bottom:1px solid #f5f5f5;">Report any damaged equipment to the laboratory attendant.</li>
+                            <li style="font-size:0.78rem;color:#444;padding:4px 0;">Seats are to be arranged neatly after use.</li>
                         </ol>
                     </div>
                 </div>
@@ -591,90 +530,106 @@ $time_slots = [
     </div>
 </div>
 
-<!-- PC Status Notification -->
-<div class="dash-card">
-    <div class="card-header-purple">
-        <i class="bi bi-info-circle-fill me-2"></i>PC Availability Alerts
-    </div>
-    <div class="card-body p-3">
-        <div id="pcAlertArea">
-            <?php
-            // Get recent PC status changes from the last 7 days
-            $recent_changes = $conn->query("
-                SELECT * FROM pc_status_history 
-                WHERE changed_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
-                AND new_status IN ('maintenance', 'not_available')
-                ORDER BY changed_at DESC 
-                LIMIT 10
-            ");
-            if ($recent_changes && $recent_changes->num_rows > 0):
-            ?>
-            <div class="alert alert-warning mb-3" style="border-radius:12px;">
-                <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                <strong>PC Maintenance Alerts</strong>
-                <hr class="my-2">
-                <?php while ($alert = $recent_changes->fetch_assoc()): ?>
-                <div class="small mb-2">
-                    <i class="bi bi-pc-display me-1"></i> 
-                    <span class="fw-bold">Lab <?= htmlspecialchars($alert['lab_name']) ?>, PC #<?= $alert['pc_number'] ?></span> 
-                    is now 
-                    <span class="badge bg-danger"><?= ucfirst(str_replace('_', ' ', $alert['new_status'])) ?></span>
-                    <br>
-                    <small class="text-muted">Updated: <?= date('M d, H:i', strtotime($alert['changed_at'])) ?></small>
-                    <?php if ($alert['notes']): ?>
-                    <div class="text-muted mt-1" style="font-size:0.7rem;">Note: <?= htmlspecialchars($alert['notes']) ?></div>
-                    <?php endif; ?>
-                </div>
-                <?php endwhile; ?>
-            </div>
-            <?php else: ?>
-            <div class="alert alert-success mb-0" style="border-radius:12px;">
-                <i class="bi bi-check-circle-fill me-2"></i>
-                All PCs are currently available. No maintenance alerts at this time.
-            </div>
-            <?php endif; ?>
-            
-            <!-- Display PCs that are currently unavailable -->
-            <?php
-            $unavailable_pcs = $conn->query("
-                SELECT lab_name, pc_number, status, notes 
-                FROM pc_status 
-                WHERE status IN ('maintenance', 'not_available', 'in_use')
-                ORDER BY lab_name, pc_number
-                LIMIT 20
-            ");
-            if ($unavailable_pcs && $unavailable_pcs->num_rows > 0):
-            ?>
-            <div class="mt-3">
-                <small class="text-muted fw-bold">Currently Unavailable PCs:</small>
-                <div class="row mt-2">
-                    <?php 
-                    $current_lab = '';
-                    while ($pc = $unavailable_pcs->fetch_assoc()):
-                        if ($current_lab != $pc['lab_name']):
-                            if ($current_lab != '') echo '</div>';
-                            $current_lab = $pc['lab_name'];
-                    ?>
-                    <div class="col-12 mb-2">
-                        <strong class="text-purple">Lab <?= htmlspecialchars($pc['lab_name']) ?>:</strong>
-                        <div class="d-flex flex-wrap gap-1 mt-1">
-                    <?php endif; ?>
-                            <span class="badge bg-danger mb-1">PC #<?= $pc['pc_number'] ?></span>
-                    <?php 
-                    endwhile;
-                    if ($current_lab != '') echo '</div></div>';
-                    ?>
+<div class="sitin-summary-section" id="sitinSummary">
+    <div class="container-fluid px-0 px-md-2">
+        <div class="section-divider">
+            <span><i class="bi bi-bar-chart-line-fill me-2"></i>My Sit-in Summary &amp; Session History</span>
+        </div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-6 col-md-3">
+                <div class="dash-card mb-0">
+                    <div class="card-body p-3">
+                        <div class="summary-stat">
+                            <div class="s-num"><?= $total_hours ?><small style="font-size:.75rem;">h</small></div>
+                            <div class="s-lbl"><i class="bi bi-clock me-1"></i>Total Sit-in Hours</div>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <?php endif; ?>
+            <div class="col-6 col-md-3">
+                <div class="dash-card mb-0">
+                    <div class="card-body p-3">
+                        <div class="summary-stat">
+                            <div class="s-num"><?= $total_sessions ?></div>
+                            <div class="s-lbl"><i class="bi bi-layers me-1"></i>No. of Sessions</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="dash-card mb-0">
+                    <div class="card-body p-3">
+                        <div class="summary-stat">
+                            <div class="s-num"><?= $avg_duration ?><small style="font-size:.75rem;">m</small></div>
+                            <div class="s-lbl"><i class="bi bi-graph-up me-1"></i>Avg Session Duration</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="dash-card mb-0">
+                    <div class="card-body p-3">
+                        <div class="summary-stat">
+                            <div class="s-num"><?= $longest_session ?><small style="font-size:.75rem;">h</small></div>
+                            <div class="s-lbl"><i class="bi bi-trophy me-1"></i>Longest Session</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="dash-card">
+            <div class="card-header-blue">
+                <i class="bi bi-table me-2"></i>Sessions Table
+            </div>
+            <div class="card-body p-3">
+                <div class="table-responsive">
+                    <table id="sessionsSummaryTable" class="table table-bordered table-hover" style="font-size:0.78rem;">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Time In</th>
+                                <th>Time Out</th>
+                                <th>Duration</th>
+                                <th>PC No.</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <?php
+                        if ($sessions && $sessions->num_rows > 0):
+                            while ($s = $sessions->fetch_assoc()):
+                                $is_active = empty($s['logout_time']);
+                                $login_dt  = new DateTime($s['login_time']);
+                                $logout_dt = $is_active ? new DateTime() : new DateTime($s['logout_time']);
+                                $diff      = $login_dt->diff($logout_dt);
+                                $duration  = $is_active
+                                    ? '<span style="color:#f39c12;font-weight:700;">Ongoing</span>'
+                                    : ($diff->h > 0 ? $diff->h.'h '.$diff->i.'m' : $diff->i.'m');
+                        ?>
+                            <tr>
+                                <td><?= date('M d, Y', strtotime($s['login_time'])) ?></td>
+                                <td><?= date('h:i A', strtotime($s['login_time'])) ?></td>
+                                <td><?= $is_active ? '<span class="text-muted">—</span>' : date('h:i A', strtotime($s['logout_time'])) ?></td>
+                                <td><?= $duration ?></td>
+                                <td><?= !empty($s['pc_number']) ? '#'.htmlspecialchars($s['pc_number']) : '—' ?></td>
+                                <td><?= $is_active ? '<span class="badge-active">Active</span>' : '<span class="badge-done">Done</span>' ?></td>
+                            </tr>
+                        <?php endwhile; else: ?>
+                            <tr><td colspan="6" class="text-center text-muted py-3"><i class="bi bi-inbox me-2"></i>No sessions yet.</td></tr>
+                        <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
 <footer>&copy; <?= date('Y') ?> University of Cebu &mdash; College of Computer Studies | CCS Sit-in Monitoring System</footer>
 
-
-<!-- ════ EDIT PROFILE MODAL ════ -->
+<!-- Edit Profile Modal -->
 <div class="modal fade" id="editProfileModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -685,16 +640,16 @@ $time_slots = [
             <div class="modal-body p-4">
                 <form method="POST" enctype="multipart/form-data">
                     <div class="text-center mb-3">
-                        <div style="position:relative;width:90px;height:90px;margin:0 auto;">
-                            <img src="<?= $profile_pic ?>" id="editAvatarPreview"
-                                style="width:90px;height:90px;border-radius:50%;object-fit:cover;border:4px solid white;box-shadow:0 4px 14px rgba(151,87,214,0.25);"
-                                onerror="this.src='https://ui-avatars.com/api/?name=<?= urlencode($user['first_name'].' '.$user['last_name']) ?>&background=9757d6&color=fff&size=90'">
-                            <label for="profile_pic_input" style="position:absolute;bottom:2px;right:2px;background:var(--ccs-purple);color:white;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid white;font-size:0.75rem;">
+                        <div style="position:relative;width:80px;height:80px;margin:0 auto;">
+                            <img src="<?= htmlspecialchars($profile_pic) ?>" id="editAvatarPreview"
+                                 style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:4px solid white;box-shadow:0 4px 14px rgba(151,87,214,0.25);"
+                                 onerror="this.src='https://ui-avatars.com/api/?name=<?= urlencode($user['first_name'].' '.$user['last_name']) ?>&background=9757d6&color=fff&size=80'">
+                            <label for="profile_pic_input" style="position:absolute;bottom:2px;right:2px;background:var(--ccs-purple);color:white;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid white;font-size:0.7rem;">
                                 <i class="bi bi-camera-fill"></i>
                             </label>
                         </div>
                         <input type="file" name="profile_pic" id="profile_pic_input" hidden accept="image/*">
-                        <div style="font-size:0.72rem;color:#aaa;margin-top:6px;">Click camera to change photo</div>
+                        <div style="font-size:0.7rem;color:#aaa;margin-top:5px;">Click camera to change photo</div>
                     </div>
                     <div class="row g-2 mb-2">
                         <div class="col-6"><label class="field-label">First Name</label><input type="text" name="first_name" class="form-control" value="<?= htmlspecialchars($user['first_name']) ?>" required></div>
@@ -706,26 +661,51 @@ $time_slots = [
                         <div class="col-8">
                             <label class="field-label">Course</label>
                             <select name="course" class="form-select" required>
-                                <option value="">-- Select Course --</option>
-                                <?php $courses = ['Information Technology','Computer Engineering','Civil Engineering','Mechanical Engineering','Electrical Engineering','Industrial Engineering','Naval Architecture and Marine Engineering','Elementary Education (BEEd)','Secondary Education (BSEd)','Criminology','Commerce','Accountancy','Hotel and Restaurant Management','Customs Administration','Computer Secretarial','Industrial Psychology','AB Political Science','AB English']; foreach($courses as $c): ?>
-                                <option value="<?=$c?>" <?=$user['course']===$c?'selected':''?>><?=$c?></option>
+                                <option value="">-- Select --</option>
+                                <?php
+                                $courses = [
+                                    'Information Technology',
+                                    'Computer Engineering',
+                                    'Civil Engineering',
+                                    'Mechanical Engineering',
+                                    'Electrical Engineering',
+                                    'Industrial Engineering',
+                                    'Naval Architecture and Marine Engineering',
+                                    'Elementary Education (BEEd)',
+                                    'Secondary Education (BSEd)',
+                                    'Criminology',
+                                    'Commerce',
+                                    'Accountancy',
+                                    'Hotel and Restaurant Management',
+                                    'Customs Administration',
+                                    'Computer Secretarial',
+                                    'Industrial Psychology',
+                                    'AB Political Science',
+                                    'AB English'
+                                ];
+                                foreach ($courses as $c):
+                                ?>
+                                    <option value="<?= $c ?>" <?= $user['course'] === $c ? 'selected' : '' ?>><?= $c ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
                         <div class="col-4">
                             <label class="field-label">Year Level</label>
                             <select name="year_level" class="form-select" required>
-                                <option value="1" <?=$user['year_level']==1?'selected':''?>>1st Year</option>
-                                <option value="2" <?=$user['year_level']==2?'selected':''?>>2nd Year</option>
-                                <option value="3" <?=$user['year_level']==3?'selected':''?>>3rd Year</option>
-                                <option value="4" <?=$user['year_level']==4?'selected':''?>>4th Year</option>
+                                <option value="1" <?= $user['year_level'] == 1 ? 'selected' : '' ?>>1st</option>
+                                <option value="2" <?= $user['year_level'] == 2 ? 'selected' : '' ?>>2nd</option>
+                                <option value="3" <?= $user['year_level'] == 3 ? 'selected' : '' ?>>3rd</option>
+                                <option value="4" <?= $user['year_level'] == 4 ? 'selected' : '' ?>>4th</option>
                             </select>
                         </div>
                     </div>
-                    <div class="mb-3"><label class="field-label">New Password <span class="text-muted">(leave blank to keep current)</span></label><input type="password" name="password" class="form-control" placeholder="••••••••"></div>
+                    <div class="mb-3">
+                        <label class="field-label">New Password <span class="text-muted">(leave blank to keep)</span></label>
+                        <input type="password" name="password" class="form-control" placeholder="••••••••">
+                    </div>
                     <div class="d-flex justify-content-end gap-2">
                         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" name="update_profile" class="btn btn-purple px-4"><i class="bi bi-save-fill me-1"></i> Save Changes</button>
+                        <button type="submit" name="update_profile" class="btn btn-purple px-4"><i class="bi bi-save-fill me-1"></i>Save Changes</button>
                     </div>
                 </form>
             </div>
@@ -733,8 +713,7 @@ $time_slots = [
     </div>
 </div>
 
-
-<!-- ════ NOTIFICATIONS MODAL ════ -->
+<!-- Notifications Modal -->
 <div class="modal fade" id="notifModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -743,18 +722,20 @@ $time_slots = [
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-3">
-                <?php $notif = $conn->query("SELECT * FROM announcements ORDER BY created_at DESC LIMIT 5");
+                <?php
+                $notif = $conn->query("SELECT * FROM announcements ORDER BY created_at DESC LIMIT 5");
                 if ($notif && $notif->num_rows > 0):
                     while ($n = $notif->fetch_assoc()):
-                        $nd = date('Y-M-d', strtotime($n['created_at'])); ?>
+                        $nd = date('Y-M-d', strtotime($n['created_at']));
+                ?>
                     <div class="d-flex gap-3 align-items-start pb-3 mb-3 border-bottom">
-                        <div style="width:38px;height:38px;min-width:38px;border-radius:50%;background:#f3e9fd;display:flex;align-items:center;justify-content:center;">
-                            <i class="bi bi-megaphone-fill" style="color:var(--ccs-purple);font-size:0.88rem;"></i>
+                        <div style="width:36px;height:36px;min-width:36px;border-radius:50%;background:#f3e9fd;display:flex;align-items:center;justify-content:center;">
+                            <i class="bi bi-megaphone-fill" style="color:var(--ccs-purple);font-size:0.85rem;"></i>
                         </div>
                         <div>
-                            <div style="font-size:0.85rem;font-weight:600;color:#333;"><?= htmlspecialchars($n['admin_name']) ?></div>
-                            <div style="font-size:0.8rem;color:#666;"><?= htmlspecialchars($n['message']) ?></div>
-                            <div style="font-size:0.72rem;color:#bbb;margin-top:3px;"><i class="bi bi-calendar3 me-1"></i><?= $nd ?></div>
+                            <div style="font-size:0.83rem;font-weight:600;color:#333;"><?= htmlspecialchars($n['admin_name']) ?></div>
+                            <div style="font-size:0.78rem;color:#666;"><?= htmlspecialchars($n['message']) ?></div>
+                            <div style="font-size:0.7rem;color:#bbb;margin-top:2px;"><i class="bi bi-calendar3 me-1"></i><?= $nd ?></div>
                         </div>
                     </div>
                 <?php endwhile; else: ?>
@@ -765,8 +746,7 @@ $time_slots = [
     </div>
 </div>
 
-
-<!-- ════ HISTORY MODAL ════ -->
+<!-- History Modal -->
 <div class="modal fade" id="historyModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-xl">
         <div class="modal-content">
@@ -776,70 +756,58 @@ $time_slots = [
             </div>
             <div class="modal-body p-0">
                 <?php if (isset($feedback_success)): ?>
-                    <div class="alert alert-success py-2 px-3 m-3 mb-0" style="border-radius:8px;font-size:0.83rem;">
-                        <i class="bi bi-check-circle-fill me-2"></i><?= htmlspecialchars($feedback_success) ?>
-                    </div>
+                    <div class="alert alert-success py-2 px-3 m-3 mb-0" style="border-radius:8px;font-size:0.83rem;"><i class="bi bi-check-circle-fill me-2"></i><?= htmlspecialchars($feedback_success) ?></div>
                 <?php endif; ?>
                 <?php if (isset($feedback_error)): ?>
-                    <div class="alert alert-warning py-2 px-3 m-3 mb-0" style="border-radius:8px;font-size:0.83rem;">
-                        <i class="bi bi-exclamation-triangle-fill me-2"></i><?= htmlspecialchars($feedback_error) ?>
-                    </div>
+                    <div class="alert alert-warning py-2 px-3 m-3 mb-0" style="border-radius:8px;font-size:0.83rem;"><i class="bi bi-exclamation-triangle-fill me-2"></i><?= htmlspecialchars($feedback_error) ?></div>
                 <?php endif; ?>
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
                         <thead>
                             <tr>
-                                <th>Login Time</th>
-                                <th>Purpose</th>
-                                <th>Lab</th>
-                                <th>PC #</th>
-                                <th>Logout Time</th>
-                                <th>Status</th>
-                                <th>Feedback</th>
+                                <th>Date</th><th>Time In</th><th>Time Out</th><th>Duration</th><th>Purpose</th><th>Lab</th><th>PC #</th><th>Status</th><th>Feedback</th>
                             </tr>
                         </thead>
                         <tbody>
                         <?php
-                        $sessions->data_seek(0);
+                        if ($sessions) $sessions->data_seek(0);
                         $fb_map = [];
                         $fb_res = $conn->query("SELECT sitin_id, message FROM feedback WHERE id_number = '$id_number'");
                         if ($fb_res) while ($fb = $fb_res->fetch_assoc()) $fb_map[$fb['sitin_id']] = $fb['message'];
 
                         if ($sessions && $sessions->num_rows > 0):
                             while ($s = $sessions->fetch_assoc()):
-                                $is_active = empty($s['logout_time']);
+                                $is_active    = empty($s['logout_time']);
                                 $has_feedback = isset($fb_map[$s['id']]);
+                                $login_dt     = new DateTime($s['login_time']);
+                                $logout_dt    = $is_active ? new DateTime() : new DateTime($s['logout_time']);
+                                $diff         = $login_dt->diff($logout_dt);
+                                $dur_str      = $is_active ? '<em style="color:#f39c12;">Ongoing</em>' : ($diff->h > 0 ? $diff->h.'h '.$diff->i.'m' : $diff->i.'m');
                         ?>
                             <tr>
-                                <td><?= htmlspecialchars($s['login_time']) ?></td>
+                                <td><?= date('M d, Y', strtotime($s['login_time'])) ?></td>
+                                <td><?= date('h:i A', strtotime($s['login_time'])) ?></td>
+                                <td><?= $is_active ? '—' : date('h:i A', strtotime($s['logout_time'])) ?></td>
+                                <td><?= $dur_str ?></td>
                                 <td><?= htmlspecialchars($s['purpose']) ?></td>
                                 <td><?= htmlspecialchars($s['lab']) ?></td>
-                                <td><?= $s['pc_number'] ? '#' . $s['pc_number'] : '—' ?></td>
-                                <td><?= $is_active ? '<span class="text-muted">—</span>' : htmlspecialchars($s['logout_time']) ?></td>
+                                <td><?= !empty($s['pc_number']) ? '#'.htmlspecialchars($s['pc_number']) : '—' ?></td>
                                 <td><?= $is_active ? '<span class="badge-active">Active</span>' : '<span class="badge-done">Done</span>' ?></td>
                                 <td>
                                     <?php if ($is_active): ?>
-                                        <span class="text-muted" style="font-size:0.75rem;">Session ongoing</span>
+                                        <span class="text-muted" style="font-size:0.72rem;">Ongoing</span>
                                     <?php elseif ($has_feedback): ?>
-                                        <span style="font-size:0.75rem;color:#27ae60;font-weight:600;">
-                                            <i class="bi bi-check-circle-fill me-1"></i>Submitted
-                                        </span>
-                                        <div style="font-size:0.72rem;color:#888;font-style:italic;max-width:160px;">
-                                            "<?= htmlspecialchars($fb_map[$s['id']]) ?>"
-                                        </div>
+                                        <span style="font-size:0.72rem;color:#27ae60;font-weight:600;"><i class="bi bi-check-circle-fill me-1"></i>Submitted</span>
+                                        <div style="font-size:0.7rem;color:#888;font-style:italic;max-width:140px;">"<?= htmlspecialchars($fb_map[$s['id']]) ?>"</div>
                                     <?php else: ?>
-                                        <button class="btn btn-sm btn-purple"
-                                            style="font-size:0.72rem;padding:3px 10px;border-radius:6px;"
-                                            onclick="openFeedbackForm(<?= $s['id'] ?>)">
-                                            <i class="bi bi-chat-left-text me-1"></i>Give Feedback
+                                        <button class="btn btn-sm btn-purple" style="font-size:0.7rem;padding:2px 8px;border-radius:6px;" onclick="openFeedbackForm(<?= $s['id'] ?>)">
+                                            <i class="bi bi-chat-left-text me-1"></i>Feedback
                                         </button>
                                     <?php endif; ?>
                                 </td>
                             </tr>
                         <?php endwhile; else: ?>
-                            <tr><td colspan="7" class="text-center text-muted py-3">
-                                <i class="bi bi-inbox me-2"></i>No sit-in history found.
-                            </td><tr>
+                            <tr><td colspan="9" class="text-center text-muted py-3"><i class="bi bi-inbox me-2"></i>No sit-in history found.</td></tr>
                         <?php endif; ?>
                         </tbody>
                     </table>
@@ -849,7 +817,7 @@ $time_slots = [
     </div>
 </div>
 
-<!-- ════ FEEDBACK MODAL ════ -->
+<!-- Feedback Modal -->
 <div class="modal fade" id="feedbackModal" tabindex="-1" aria-hidden="true" style="z-index:1070;">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -868,9 +836,7 @@ $time_slots = [
                     </div>
                     <div class="d-flex justify-content-end gap-2">
                         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" name="submit_feedback" class="btn btn-purple px-4">
-                            <i class="bi bi-send-fill me-2"></i>Submit Feedback
-                        </button>
+                        <button type="submit" name="submit_feedback" class="btn btn-purple px-4"><i class="bi bi-send-fill me-2"></i>Submit</button>
                     </div>
                 </form>
             </div>
@@ -878,7 +844,106 @@ $time_slots = [
     </div>
 </div>
 
-<!-- ════ RESERVATION MODAL ════ -->
+<!-- Software Availability Modal -->
+<div class="modal fade" id="softwareModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header-purple d-flex justify-content-between align-items-center">
+                <h6 class="mb-0 fw-bold"><i class="bi bi-app-indicator me-2"></i>Lab Software Availability</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-3">
+                <?php if ($software_table_exists): ?>
+                    <?php
+                    $labs_sw = $conn->query("SELECT DISTINCT lab_name FROM lab_software ORDER BY lab_name");
+                    if ($labs_sw && $labs_sw->num_rows > 0):
+                    ?>
+                        <ul class="nav nav-tabs mb-3" id="swLabTabs">
+                            <?php $labs_sw->data_seek(0); $first = true; while ($lsw = $labs_sw->fetch_assoc()): ?>
+                                <li class="nav-item">
+                                    <button class="nav-link <?= $first ? 'active' : '' ?>" data-bs-toggle="tab" data-bs-target="#swLab<?= preg_replace('/\W/','',$lsw['lab_name']) ?>">
+                                        Lab <?= htmlspecialchars($lsw['lab_name']) ?>
+                                    </button>
+                                </li>
+                            <?php $first = false; endwhile; ?>
+                        </ul>
+                        <div class="tab-content">
+                            <?php $labs_sw->data_seek(0); $first = true; while ($lsw = $labs_sw->fetch_assoc()):
+                                $lid = preg_replace('/\W/','',$lsw['lab_name']);
+                                $sw_list = $conn->query("SELECT * FROM lab_software WHERE lab_name='{$lsw['lab_name']}' ORDER BY software_name");
+                            ?>
+                                <div class="tab-pane fade <?= $first ? 'show active' : '' ?>" id="swLab<?= $lid ?>">
+                                    <?php if ($sw_list && $sw_list->num_rows > 0): ?>
+                                        <div class="table-responsive">
+                                            <table class="table table-bordered table-hover" style="font-size:0.82rem;">
+                                                <thead><tr><th>Software</th><th>Version</th><th>Category</th><th>Status</th></tr></thead>
+                                                <tbody>
+                                                <?php while ($sw = $sw_list->fetch_assoc()): ?>
+                                                    <tr>
+                                                        <td><i class="bi bi-app me-1" style="color:var(--ccs-purple);"></i><?= htmlspecialchars($sw['software_name']) ?></td>
+                                                        <td><?= htmlspecialchars($sw['version'] ?? '—') ?></td>
+                                                        <td><?= htmlspecialchars($sw['category'] ?? '—') ?></td>
+                                                        <td>
+                                                            <?php if ($sw['is_available']): ?>
+                                                                <span class="software-badge sw-available"><i class="bi bi-check-circle-fill me-1"></i>Available</span>
+                                                            <?php else: ?>
+                                                                <span class="software-badge sw-unavailable"><i class="bi bi-x-circle-fill me-1"></i>Not Available</span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                    </tr>
+                                                <?php endwhile; ?>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    <?php else: ?>
+                                        <p class="text-muted text-center py-3"><i class="bi bi-inbox me-2"></i>No software listed for this lab.</p>
+                                    <?php endif; ?>
+                                </div>
+                            <?php $first = false; endwhile; ?>
+                        </div>
+                    <?php else: ?>
+                        <p class="text-muted text-center py-3"><i class="bi bi-inbox me-2"></i>No software information available yet.</p>
+                    <?php endif; ?>
+                <?php else: ?>
+                    <p class="text-muted mb-3" style="font-size:0.83rem;"><i class="bi bi-info-circle me-1"></i>Software list not yet configured. Showing current PC availability per lab.</p>
+                    <?php
+                    $labs_avail = $conn->query("
+                        SELECT lc.lab_name,
+                            SUM(CASE WHEN ps.status='available' THEN 1 ELSE 0 END) as available_count,
+                            SUM(CASE WHEN ps.status='in_use' THEN 1 ELSE 0 END) as in_use_count,
+                            SUM(CASE WHEN ps.status='maintenance' THEN 1 ELSE 0 END) as maintenance_count,
+                            lc.total_pcs
+                        FROM lab_config lc
+                        LEFT JOIN pc_status ps ON lc.lab_name=ps.lab_name
+                        GROUP BY lc.lab_name
+                        ORDER BY lc.lab_name
+                    ");
+                    if ($labs_avail && $labs_avail->num_rows > 0):
+                    ?>
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead><tr><th>Lab</th><th>Available PCs</th><th>In Use</th><th>Maintenance</th><th>Total</th></tr></thead>
+                                <tbody>
+                                <?php while ($la = $labs_avail->fetch_assoc()): ?>
+                                    <tr>
+                                        <td><strong>Lab <?= htmlspecialchars($la['lab_name']) ?></strong></td>
+                                        <td><span class="software-badge sw-available"><?= intval($la['available_count']) ?> PCs</span></td>
+                                        <td><span class="software-badge" style="background:#d4e6f1;color:#1a5276;"><?= intval($la['in_use_count']) ?></span></td>
+                                        <td><span class="software-badge" style="background:#fdebd0;color:#784212;"><?= intval($la['maintenance_count']) ?></span></td>
+                                        <td><?= intval($la['total_pcs']) ?></td>
+                                    </tr>
+                                <?php endwhile; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reservation Modal -->
 <div class="modal fade" id="reservationModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
@@ -887,115 +952,119 @@ $time_slots = [
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
-                <?php if (isset($res_error)): ?>
-                    <div class="alert alert-danger py-2 px-3 mb-3" style="border-radius:8px;font-size:0.83rem;"><i class="bi bi-exclamation-circle-fill me-2"></i><?= htmlspecialchars($res_error) ?></div>
-                <?php endif; ?>
-                <?php if (isset($res_success)): ?>
-                    <div class="alert alert-success py-2 px-3 mb-3" style="border-radius:8px;font-size:0.83rem;"><i class="bi bi-check-circle-fill me-2"></i><?= htmlspecialchars($res_success) ?></div>
-                <?php endif; ?>
+                <?php if (!$reservations_enabled): ?>
+                    <div class="res-disabled-banner mb-3">
+                        <i class="bi bi-lock-fill me-2"></i>
+                        Reservations are currently <strong>disabled</strong> by the administrator. Please check back later.
+                    </div>
+                <?php else: ?>
+                    <?php if (isset($res_error)): ?><div class="alert alert-danger py-2 px-3 mb-3" style="border-radius:8px;font-size:0.83rem;"><i class="bi bi-exclamation-circle-fill me-2"></i><?= htmlspecialchars($res_error) ?></div><?php endif; ?>
+                    <?php if (isset($res_success)): ?><div class="alert alert-success py-2 px-3 mb-3" style="border-radius:8px;font-size:0.83rem;"><i class="bi bi-check-circle-fill me-2"></i><?= htmlspecialchars($res_success) ?></div><?php endif; ?>
 
-                <div class="res-form-box">
-                    <div class="res-title"><i class="bi bi-plus-circle-fill me-1"></i>New Reservation</div>
-                    <form method="POST" id="reservationForm">
-                        <div class="row g-2">
-                            <div class="col-sm-6">
-                                <label class="field-label">ID Number</label>
-                                <input type="text" class="form-control" value="<?= htmlspecialchars($user['id_number']) ?>" readonly style="background:#ede6f5;font-weight:600;">
-                            </div>
-                            <div class="col-sm-6">
-                                <label class="field-label">Name</label>
-                                <input type="text" class="form-control" value="<?= htmlspecialchars($user['first_name'].' '.$user['last_name']) ?>" readonly style="background:#ede6f5;font-weight:600;">
-                            </div>
-                            <div class="col-sm-6">
-                                <label class="field-label">Purpose</label>
-                                <select name="res_purpose" class="form-select" required>
-                                    <option value="">-- Select Purpose --</option>
-                                    <option>C Programming</option><option>C++</option><option>Java</option>
-                                    <option>ASP.Net</option><option>PHP</option><option>Python</option><option>Other</option>
-                                </select>
-                            </div>
-                            <div class="col-sm-6">
-                                <label class="field-label">Lab</label>
-                                <select name="res_lab" id="res_lab" class="form-select" required>
-                                    <option value="">-- Select Lab --</option>
-                                    <?php
-                                    $lab_list = $conn->query("SELECT lab_name FROM lab_config ORDER BY lab_name");
-                                    while ($lab = $lab_list->fetch_assoc()):
-                                    ?>
-                                    <option value="<?= $lab['lab_name'] ?>">Lab <?= $lab['lab_name'] ?></option>
-                                    <?php endwhile; ?>
-                                </select>
-                            </div>
-                            <div class="col-sm-6">
-                                <label class="field-label">Preferred Time Slot</label>
-                                <div class="time-slot-group" id="timeSlotGroup">
-                                    <?php foreach ($time_slots as $slot): ?>
-                                    <div class="time-slot-option">
-                                        <input type="radio" name="res_time_slot" value="<?= $slot ?>" id="slot_<?= preg_replace('/[^a-zA-Z0-9]/', '_', $slot) ?>" required>
-                                        <label for="slot_<?= preg_replace('/[^a-zA-Z0-9]/', '_', $slot) ?>"><?= $slot ?></label>
+                    <div class="res-form-box">
+                        <div class="res-title"><i class="bi bi-plus-circle-fill me-1"></i>New Reservation</div>
+                        <form method="POST" id="reservationForm">
+                            <div class="row g-2">
+                                <div class="col-sm-6">
+                                    <label class="field-label">ID Number</label>
+                                    <input type="text" class="form-control" value="<?= htmlspecialchars($user['id_number']) ?>" readonly style="background:#ede6f5;font-weight:600;">
+                                </div>
+                                <div class="col-sm-6">
+                                    <label class="field-label">Name</label>
+                                    <input type="text" class="form-control" value="<?= htmlspecialchars($user['first_name'].' '.$user['last_name']) ?>" readonly style="background:#ede6f5;font-weight:600;">
+                                </div>
+                                <div class="col-sm-6">
+                                    <label class="field-label">Purpose</label>
+                                    <select name="res_purpose" class="form-select" required>
+                                        <option value="">-- Select Purpose --</option>
+                                        <option>C Programming</option><option>C++</option><option>Java</option>
+                                        <option>ASP.Net</option><option>PHP</option><option>Python</option><option>Other</option>
+                                    </select>
+                                </div>
+                                <div class="col-sm-6">
+                                    <label class="field-label">Lab</label>
+                                    <select name="res_lab" id="res_lab" class="form-select" required>
+                                        <option value="">-- Select Lab --</option>
+                                        <?php
+                                        $lab_list = $conn->query("SELECT lab_name FROM lab_config ORDER BY lab_name");
+                                        while ($lab = $lab_list->fetch_assoc()):
+                                        ?>
+                                            <option value="<?= htmlspecialchars($lab['lab_name']) ?>">Lab <?= htmlspecialchars($lab['lab_name']) ?></option>
+                                        <?php endwhile; ?>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <label class="field-label">Preferred Time Slot</label>
+                                    <div class="d-flex gap-2 flex-wrap mt-1">
+                                        <?php foreach ($time_slots as $slot): ?>
+                                            <?php $sid = preg_replace('/[^a-zA-Z0-9]/', '_', $slot); ?>
+                                            <div class="time-slot-option">
+                                                <input type="radio" name="res_time_slot" value="<?= htmlspecialchars($slot) ?>" id="slot_<?= $sid ?>" required>
+                                                <label for="slot_<?= $sid ?>"><?= htmlspecialchars($slot) ?></label>
+                                            </div>
+                                        <?php endforeach; ?>
                                     </div>
-                                    <?php endforeach; ?>
+                                </div>
+                                <div class="col-sm-6">
+                                    <label class="field-label">Date</label>
+                                    <input type="date" name="res_date" id="res_date" class="form-control" min="<?= date('Y-m-d') ?>" required>
+                                </div>
+                                <div class="col-12">
+                                    <label class="field-label">Select PC</label>
+                                    <div id="selectedPcDisplay" onclick="openPCSelectionModal()"
+                                         style="cursor:pointer;background:linear-gradient(135deg,#f3e9fd,#e8f0fe);border:2px solid var(--ccs-purple);border-radius:10px;padding:10px 14px;font-size:0.85rem;font-weight:700;color:var(--ccs-purple);display:flex;align-items:center;gap:10px;">
+                                        <i class="bi bi-pc-display-horizontal" style="font-size:1.1rem;"></i>
+                                        <span id="selectedPcText">Click to select a PC</span>
+                                    </div>
+                                    <input type="hidden" name="res_pc" id="res_pc_input" value="">
+                                    <div id="pcRequiredNote" style="font-size:0.72rem;color:#e74c3c;margin-top:3px;display:none;"><i class="bi bi-exclamation-circle me-1"></i>Please select a PC.</div>
                                 </div>
                             </div>
-                            <div class="col-sm-6">
-                                <label class="field-label">Date</label>
-                                <input type="date" name="res_date" id="res_date" class="form-control" min="<?= date('Y-m-d') ?>" required>
+                            <div class="mt-3">
+                                <button type="submit" name="submit_reservation" class="btn btn-purple px-4">
+                                    <i class="bi bi-calendar-plus me-2"></i>Submit Reservation
+                                </button>
                             </div>
+                        </form>
+                    </div>
+                <?php endif; ?>
 
-                            <!-- Selected PC display -->
-                            <div class="col-12" id="pcDisplayCol">
-                                <label class="field-label">Select PC</label>
-                                <div class="selected-pc-display" id="selectedPcDisplay" onclick="openPCSelectionModal()" style="cursor: pointer;">
-                                    <i class="bi bi-pc-display-horizontal"></i>
-                                    <span id="selectedPcText">Click to select a PC (1-50)</span>
-                                </div>
-                                <input type="hidden" name="res_pc" id="res_pc_input" value="">
-                                <div id="pcRequiredNote" style="font-size:0.73rem;color:#e74c3c;margin-top:4px;display:none;">
-                                    <i class="bi bi-exclamation-circle me-1"></i>Please select a PC (1-50).
-                                </div>
-                            </div>
-                        </div>
-                        <div class="mt-3">
-                            <button type="submit" name="submit_reservation" class="btn btn-purple px-4">
-                                <i class="bi bi-calendar-plus me-2"></i>Submit Reservation
-                            </button>
-                        </div>
-                    </form>
-                </div>
-
-                <!-- My Reservations table -->
-                <div style="font-size:0.68rem;color:#aaa;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">
+                <div style="font-size:0.67rem;color:#aaa;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;">
                     <i class="bi bi-list-ul me-1"></i>My Reservations
                 </div>
                 <div class="table-responsive">
-                    <table class="table table-hover mb-0" style="font-size:0.82rem;">
+                    <table class="table table-hover mb-0" style="font-size:0.8rem;">
                         <thead><tr><th>Date</th><th>Purpose</th><th>Lab</th><th>Time Slot</th><th>PC #</th><th>Status</th><th>Action</th></tr></thead>
                         <tbody>
-                        <?php if ($res_table_exists && $reservations && $reservations->num_rows > 0):
-                            while ($r = $reservations->fetch_assoc()):
+                        <?php if ($res_table_exists && $reservations && $reservations->num_rows > 0): ?>
+                            <?php while ($r = $reservations->fetch_assoc()):
                                 $rbadge = match(strtolower($r['status'])) {
                                     'pending'   => 'badge-pending',
                                     'approved'  => 'badge-approved',
                                     'cancelled' => 'badge-cancelled',
                                     default     => 'badge-pending'
-                                }; ?>
+                                };
+                            ?>
                             <tr>
                                 <td><?= htmlspecialchars($r['reservation_date']) ?></td>
                                 <td><?= htmlspecialchars($r['purpose']) ?></td>
                                 <td><?= htmlspecialchars($r['lab']) ?></td>
                                 <td><?= htmlspecialchars($r['preferred_time']) ?></td>
-                                <td><?= !empty($r['seat_number']) ? '<span style="font-weight:700;color:var(--ccs-purple);">#' . intval($r['seat_number']) . '</span>' : '<span class="text-muted">—</span>' ?></td>
+                                <td><?= !empty($r['seat_number']) ? '<strong style="color:var(--ccs-purple);">#'.intval($r['seat_number']).'</strong>' : '—' ?></td>
                                 <td><span class="<?= $rbadge ?>"><?= htmlspecialchars($r['status']) ?></span></td>
                                 <td>
                                     <?php if (strtolower($r['status']) === 'pending'): ?>
                                         <form method="POST" style="display:inline;" onsubmit="return confirm('Cancel this reservation?')">
-                                            <input type="hidden" name="res_id" value="<?= $r['id'] ?>">
-                                            <button name="cancel_reservation" class="btn btn-sm btn-danger" style="font-size:0.73rem;padding:2px 8px;border-radius:6px;"><i class="bi bi-x-circle me-1"></i>Cancel</button>
+                                            <input type="hidden" name="res_id" value="<?= intval($r['id']) ?>">
+                                            <button name="cancel_reservation" class="btn btn-sm btn-danger" style="font-size:0.7rem;padding:2px 8px;border-radius:6px;"><i class="bi bi-x-circle me-1"></i>Cancel</button>
                                         </form>
-                                    <?php else: ?><span class="text-muted" style="font-size:0.75rem;">—</span><?php endif; ?>
+                                    <?php else: ?>
+                                        <span class="text-muted" style="font-size:0.73rem;">—</span>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
-                        <?php endwhile; else: ?>
+                            <?php endwhile; ?>
+                        <?php else: ?>
                             <tr><td colspan="7" class="text-center text-muted py-3"><i class="bi bi-calendar-x me-2"></i>No reservations yet.</td></tr>
                         <?php endif; ?>
                         </tbody>
@@ -1006,266 +1075,164 @@ $time_slots = [
     </div>
 </div>
 
-
-<!-- ════ PC SELECTION MODAL (50 PCs Grid) ════ -->
 <div class="modal fade" id="pcSelectionModal" tabindex="-1" aria-hidden="true" style="z-index:1065;">
-    <div class="modal-dialog modal-dialog-centered" style="max-width: 800px;">
-        <div class="modal-content" style="border-radius:20px;overflow:hidden;border:none;">
-            <div class="pc-selection-header d-flex justify-content-between align-items-center">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:820px;">
+        <div class="modal-content" style="border-radius:20px;overflow:hidden;">
+            <div style="background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);color:white;padding:16px 22px;display:flex;justify-content:space-between;align-items:center;">
                 <div>
-                    <div style="font-weight:800;font-size:1.05rem;letter-spacing:0.01em;">
-                        <i class="bi bi-pc-display me-2" style="color:#a1cbf7;"></i>Select Your PC - Lab <span id="pcModalLabLabel">—</span>
-                    </div>
-                    <div style="font-size:0.75rem;opacity:0.6;margin-top:3px;">Click on any available PC to select it</div>
+                    <div style="font-weight:800;font-size:1rem;"><i class="bi bi-pc-display me-2" style="color:#a1cbf7;"></i>Select Your PC — Lab <span id="pcModalLabLabel">—</span></div>
+                    <div style="font-size:0.72rem;opacity:.6;margin-top:2px;">Click on any available (green) PC</div>
                 </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-
-            <div class="pc-legend">
-                <div><span class="legend-dot legend-available"></span>Available</div>
-                <div><span class="legend-dot legend-occupied"></span>Booked/In Use</div>
-                <div><span class="legend-dot legend-maintenance"></span>Maintenance</div>
-                <div><span class="legend-dot legend-selected"></span>Your Selection</div>
+            <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;padding:9px 18px;background:#f8f9fa;border-bottom:1px solid #eee;font-size:0.75rem;color:#555;">
+                <div><span class="legend-dot" style="background:#27ae60;"></span>Available</div>
+                <div><span class="legend-dot" style="background:#e74c3c;"></span>Booked/In Use</div>
+                <div><span class="legend-dot" style="background:#f39c12;"></span>Maintenance</div>
+                <div><span class="legend-dot" style="background:#9757d6;"></span>Your Selection</div>
+                <div class="ms-auto">Available: <strong id="availablePcCount">—</strong></div>
             </div>
-
-            <div class="pc-room-wrapper">
-                <div class="front-board">
-                    <i class="bi bi-easel me-2"></i> COMPUTER LAB (PCs 1-50)
-                </div>
-                <div class="pc-grid" id="pcSelectionGrid">
-                    <!-- JS will generate 50 PCs here -->
-                </div>
+            <div style="padding:16px 18px 10px;background:#fff;">
+                <div style="background:linear-gradient(90deg,#1a1a2e,#2c3e6b);color:#a1cbf7;text-align:center;padding:7px 18px;border-radius:8px;font-size:0.68rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;margin-bottom:14px;"><i class="bi bi-easel me-2"></i>FRONT — COMPUTER LAB</div>
+                <div id="pcSelectionGrid" style="display:grid;grid-template-columns:repeat(10,1fr);gap:7px;"></div>
             </div>
-
-            <div class="pc-selection-footer">
-                <div class="avail-counter">
-                    Total PCs: 50 &nbsp;|&nbsp; Available: <strong id="availablePcCount">—</strong>
-                </div>
-                <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
-                        <i class="bi bi-arrow-left me-1"></i>Cancel
-                    </button>
-                    <button type="button" class="btn btn-purple px-4" id="confirmPcBtn" disabled onclick="confirmPCSelection()">
-                        <i class="bi bi-check2-circle me-2"></i>Confirm PC Selection
-                    </button>
-                </div>
+            <div style="padding:11px 18px 14px;background:#fafafa;border-top:1px solid #f0f0f0;display:flex;justify-content:flex-end;gap:10px;">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal"><i class="bi bi-arrow-left me-1"></i>Cancel</button>
+                <button type="button" class="btn btn-purple px-4" id="confirmPcBtn" disabled onclick="confirmPCSelection()"><i class="bi bi-check2-circle me-2"></i>Confirm Selection</button>
             </div>
         </div>
     </div>
 </div>
 
-
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
 <script>
-// PC Status Data from PHP
-const pcStatusData = <?php 
-    $pc_data = [];
-    $labs = $conn->query("SELECT lab_name FROM lab_config");
-    while ($lab = $labs->fetch_assoc()) {
-        $lab_name = $lab['lab_name'];
-        $pcs = $conn->query("SELECT pc_number, status FROM pc_status WHERE lab_name = '$lab_name'");
-        $pc_data[$lab_name] = [];
-        while ($pc = $pcs->fetch_assoc()) {
-            $pc_data[$lab_name][$pc['pc_number']] = $pc['status'];
-        }
+$(document).ready(function() {
+    if ($('#sessionsSummaryTable').length) {
+        $('#sessionsSummaryTable').DataTable({
+            pageLength: 5,
+            order: [[0,'desc']],
+            language: { emptyTable: 'No sessions yet.' }
+        });
     }
-    echo json_encode($pc_data);
-?>;
+});
 
-// Occupied PCs from reservations
-const occupiedPCs = <?= json_encode($occupied_pcs) ?>;
+(function() {
+    const section = document.getElementById('sitinSummary');
+    if (!section) return;
+    section.style.opacity = '0';
+    section.style.transform = 'translateY(28px)';
+    section.style.transition = 'opacity 0.55s ease, transform 0.55s ease';
 
+    const observer = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                section.style.opacity = '1';
+                section.style.transform = 'translateY(0)';
+                observer.unobserve(section);
+            }
+        });
+    }, { threshold: 0.1 });
+
+    observer.observe(section);
+})();
+
+const pcStatusData = <?= json_encode($pc_data ?? []) ?>;
+const occupiedPCs = <?= json_encode($occupied_pcs ?? []) ?>;
 let currentSelectedPC = null;
-let pcSelectionModal = null;
+let pcSelectionModal  = null;
 
 function openPCSelectionModal() {
-    const lab = document.getElementById('res_lab').value;
-    const date = document.getElementById('res_date').value;
-    const timeSlot = document.querySelector('input[name="res_time_slot"]:checked');
-    
-    if (!lab) {
-        Swal.fire({ icon: 'warning', title: 'Select Lab First', text: 'Please select a laboratory first.', confirmButtonColor: '#9757d6' });
-        return;
-    }
-    
-    if (!date) {
-        Swal.fire({ icon: 'warning', title: 'Select Date', text: 'Please select a reservation date first.', confirmButtonColor: '#9757d6' });
-        return;
-    }
-    
-    if (!timeSlot) {
-        Swal.fire({ icon: 'warning', title: 'Select Time Slot', text: 'Please select a preferred time slot first.', confirmButtonColor: '#9757d6' });
-        return;
-    }
-    
+    const lab      = document.getElementById('res_lab').value;
+    const date     = document.getElementById('res_date').value;
+    const slotEl   = document.querySelector('input[name="res_time_slot"]:checked');
+
+    if (!lab)    { Swal.fire({ icon:'warning', title:'Select Lab First', confirmButtonColor:'#9757d6' }); return; }
+    if (!date)   { Swal.fire({ icon:'warning', title:'Select Date First', confirmButtonColor:'#9757d6' }); return; }
+    if (!slotEl) { Swal.fire({ icon:'warning', title:'Select Time Slot First', confirmButtonColor:'#9757d6' }); return; }
+
     document.getElementById('pcModalLabLabel').textContent = lab;
-    buildPCGrid(lab, date, timeSlot.value);
-    
-    if (!pcSelectionModal) {
-        pcSelectionModal = new bootstrap.Modal(document.getElementById('pcSelectionModal'));
-    }
+    buildPCGrid(lab, date, slotEl.value);
+    if (!pcSelectionModal) pcSelectionModal = new bootstrap.Modal(document.getElementById('pcSelectionModal'));
     pcSelectionModal.show();
 }
 
 function buildPCGrid(lab, date, timeSlot) {
-    const grid = document.getElementById('pcSelectionGrid');
+    const grid   = document.getElementById('pcSelectionGrid');
     const labPCs = pcStatusData[lab] || {};
-    const occupiedForSlot = (occupiedPCs[lab] && occupiedPCs[lab][date] && occupiedPCs[lab][date][timeSlot]) 
-        ? occupiedPCs[lab][date][timeSlot] : [];
-    
+    const booked = (occupiedPCs[lab] && occupiedPCs[lab][date] && occupiedPCs[lab][date][timeSlot]) ? occupiedPCs[lab][date][timeSlot] : [];
     grid.innerHTML = '';
-    let availableCount = 0;
-    
+    let avail = 0;
+
     for (let i = 1; i <= 50; i++) {
         const pcStatus = labPCs[i] || 'available';
-        const isOccupied = occupiedForSlot.includes(i);
-        const isSelected = (currentSelectedPC === i);
-        
-        let statusClass = '';
-        let statusText = '';
-        let isSelectable = false;
-        
-        if (isSelected) {
-            statusClass = 'selected';
-            statusText = 'Selected';
-            isSelectable = true;
-        } else if (isOccupied) {
-            statusClass = 'occupied';
-            statusText = 'Booked';
-            isSelectable = false;
-        } else if (pcStatus === 'maintenance') {
-            statusClass = 'maintenance';
-            statusText = 'Maintenance';
-            isSelectable = false;
-        } else if (pcStatus === 'in_use') {
-            statusClass = 'occupied';
-            statusText = 'In Use';
-            isSelectable = false;
-        } else if (pcStatus === 'not_available') {
-            statusClass = 'occupied';
-            statusText = 'Not Available';
-            isSelectable = false;
-        } else {
-            statusClass = 'available';
-            statusText = 'Available';
-            isSelectable = true;
-            availableCount++;
-        }
-        
-        const pcCard = document.createElement('div');
-        pcCard.className = `pc-card ${statusClass}`;
-        pcCard.innerHTML = `
-            <i class="bi bi-pc-display-horizontal"></i>
-            <span>${i}</span>
-            <small style="font-size:0.6rem;">${statusText}</small>
-        `;
-        
-        if (isSelectable && !isSelected) {
-            pcCard.style.cursor = 'pointer';
-            pcCard.onclick = (function(pcNum) {
-                return function() { selectPC(pcNum); };
-            })(i);
-        }
-        
-        grid.appendChild(pcCard);
+        const isBooked = booked.includes(i);
+        const isSel    = currentSelectedPC === i;
+        let cls = '', selectable = false;
+
+        if (isSel) { cls = 'selected'; selectable = true; }
+        else if (isBooked || pcStatus === 'in_use' || pcStatus === 'not_available') { cls = 'occupied'; }
+        else if (pcStatus === 'maintenance') { cls = 'maintenance'; }
+        else { cls = 'available'; selectable = true; avail++; }
+
+        const el = document.createElement('div');
+        el.className = 'pc-card-sel ' + cls;
+        el.innerHTML = `<i class="bi bi-pc-display-horizontal"></i><span>${i}</span>`;
+        el.title = `PC #${i}`;
+        if (selectable && !isSel) el.onclick = () => selectPC(i);
+        grid.appendChild(el);
     }
-    
-    document.getElementById('availablePcCount').textContent = availableCount;
+    document.getElementById('availablePcCount').textContent = avail;
 }
 
-function selectPC(pcNumber) {
-    currentSelectedPC = pcNumber;
-    
-    // Update the grid to highlight the selected PC
-    const lab = document.getElementById('res_lab').value;
+function selectPC(n) {
+    currentSelectedPC = n;
+    const lab  = document.getElementById('res_lab').value;
     const date = document.getElementById('res_date').value;
-    const timeSlot = document.querySelector('input[name="res_time_slot"]:checked').value;
-    buildPCGrid(lab, date, timeSlot);
-    
-    // Enable the confirm button
+    const slot = document.querySelector('input[name="res_time_slot"]:checked').value;
+    buildPCGrid(lab, date, slot);
     document.getElementById('confirmPcBtn').disabled = false;
-    
-    // Show success message
-    Swal.fire({
-        title: 'PC #' + pcNumber + ' Selected',
-        text: 'Click "Confirm PC Selection" to proceed.',
-        icon: 'success',
-        timer: 1500,
-        showConfirmButton: false
-    });
+    Swal.fire({ title:'PC #'+n+' Selected', text:'Click Confirm to proceed.', icon:'success', timer:1200, showConfirmButton:false });
 }
 
 function confirmPCSelection() {
-    if (currentSelectedPC) {
-        document.getElementById('res_pc_input').value = currentSelectedPC;
-        document.getElementById('selectedPcText').innerHTML = `<strong>PC #${currentSelectedPC}</strong>`;
-        document.getElementById('selectedPcDisplay').style.borderColor = '#27ae60';
-        document.getElementById('pcRequiredNote').style.display = 'none';
-        
-        pcSelectionModal.hide();
-        
-        Swal.fire({
-            title: 'PC Selected!',
-            text: `PC #${currentSelectedPC} has been reserved for your selected time slot.`,
-            icon: 'success',
-            confirmButtonColor: '#9757d6'
-        });
-    }
+    if (!currentSelectedPC) return;
+    document.getElementById('res_pc_input').value = currentSelectedPC;
+    document.getElementById('selectedPcText').innerHTML = '<strong>PC #' + currentSelectedPC + ' Selected</strong>';
+    document.getElementById('selectedPcDisplay').style.borderColor = '#27ae60';
+    document.getElementById('pcRequiredNote').style.display = 'none';
+    pcSelectionModal.hide();
+    Swal.fire({ title:'PC Selected!', text:`PC #${currentSelectedPC} confirmed.`, icon:'success', confirmButtonColor:'#9757d6' });
 }
 
-// Reset PC selection when lab, date, or time slot changes
 function resetPCSelection() {
     currentSelectedPC = null;
     document.getElementById('res_pc_input').value = '';
-    document.getElementById('selectedPcText').innerHTML = 'Click to select a PC (1-50)';
+    document.getElementById('selectedPcText').innerHTML = 'Click to select a PC';
     document.getElementById('selectedPcDisplay').style.borderColor = '';
-    document.getElementById('confirmPcBtn').disabled = true;
+    if (document.getElementById('confirmPcBtn')) document.getElementById('confirmPcBtn').disabled = true;
 }
 
-// Event listeners to reset PC selection
-document.getElementById('res_lab').addEventListener('change', resetPCSelection);
-document.getElementById('res_date').addEventListener('change', resetPCSelection);
-document.querySelectorAll('input[name="res_time_slot"]').forEach(radio => {
-    radio.addEventListener('change', resetPCSelection);
+['res_lab','res_date'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', resetPCSelection);
 });
+document.querySelectorAll('input[name="res_time_slot"]').forEach(r => r.addEventListener('change', resetPCSelection));
 
-// Form validation
-document.getElementById('reservationForm').addEventListener('submit', function(e) {
-    const lab = document.getElementById('res_lab').value;
-    const date = document.getElementById('res_date').value;
-    const timeSlot = document.querySelector('input[name="res_time_slot"]:checked');
+const resForm = document.getElementById('reservationForm');
+if (resForm) resForm.addEventListener('submit', function(e) {
     const pc = document.getElementById('res_pc_input').value;
-    
-    if (!lab) {
-        e.preventDefault();
-        Swal.fire({ icon: 'warning', title: 'Missing Information', text: 'Please select a laboratory.', confirmButtonColor: '#9757d6' });
-        return;
-    }
-    
-    if (!date) {
-        e.preventDefault();
-        Swal.fire({ icon: 'warning', title: 'Missing Information', text: 'Please select a reservation date.', confirmButtonColor: '#9757d6' });
-        return;
-    }
-    
-    if (!timeSlot) {
-        e.preventDefault();
-        Swal.fire({ icon: 'warning', title: 'Missing Information', text: 'Please select a preferred time slot.', confirmButtonColor: '#9757d6' });
-        return;
-    }
-    
     if (!pc) {
         e.preventDefault();
         document.getElementById('pcRequiredNote').style.display = 'block';
-        Swal.fire({ icon: 'warning', title: 'PC Not Selected', text: 'Please select a PC (1-50) for your reservation.', confirmButtonColor: '#9757d6' });
-        return;
+        Swal.fire({ icon:'warning', title:'PC Not Selected', text:'Please select a PC for your reservation.', confirmButtonColor:'#9757d6' });
     }
 });
 
-// ── Profile picture preview ───────────────────────────────────────────
-document.getElementById('profile_pic_input').addEventListener('change', function() {
+document.getElementById('profile_pic_input')?.addEventListener('change', function() {
     const [file] = this.files;
     if (file) {
         const url = URL.createObjectURL(file);
@@ -1274,85 +1241,35 @@ document.getElementById('profile_pic_input').addEventListener('change', function
     }
 });
 
-// ── Auto-open reservation modal ───────────────────────────────────────
 <?php if (isset($res_error) || isset($res_success)): ?>
-document.addEventListener('DOMContentLoaded', function() {
-    new bootstrap.Modal(document.getElementById('reservationModal')).show();
-});
+document.addEventListener('DOMContentLoaded', () => new bootstrap.Modal(document.getElementById('reservationModal')).show());
 <?php endif; ?>
 
-// ── Logout ────────────────────────────────────────────────────────────
+<?php if (isset($feedback_success) || isset($feedback_error)): ?>
+document.addEventListener('DOMContentLoaded', () => new bootstrap.Modal(document.getElementById('historyModal')).show());
+<?php endif; ?>
+
 function confirmLogout(e) {
     e.preventDefault();
     Swal.fire({
-        title: 'Logging out?',
-        text: 'Are you sure you want to log out?',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: '<i class="bi bi-box-arrow-right me-1"></i> Yes, Logout',
-        cancelButtonText: 'Cancel',
-        confirmButtonColor: '#9757d6',
-        cancelButtonColor: '#6c757d',
-    }).then((result) => {
-        if (result.isConfirmed) {
-            Swal.fire({
-                title: 'Logged out!',
-                text: 'You have been logged out successfully.',
-                icon: 'success', timer: 1500,
-                showConfirmButton: false, timerProgressBar: true,
-            }).then(() => { window.location.href = 'landingpage.php'; });
+        title:'Logging out?', text:'Are you sure?', icon:'warning',
+        showCancelButton:true,
+        confirmButtonText:'<i class="bi bi-box-arrow-right me-1"></i> Yes, Logout',
+        cancelButtonText:'Cancel', confirmButtonColor:'#9757d6', cancelButtonColor:'#6c757d'
+    }).then(r => {
+        if (r.isConfirmed) {
+            Swal.fire({ title:'Logged out!', icon:'success', timer:1500, showConfirmButton:false })
+                .then(() => { window.location.href = 'landingpage.php'; });
         }
     });
 }
 
-// ── Feedback modal opener ─────────────────────────────────────────────
 function openFeedbackForm(sitinId) {
     document.getElementById('feedback_sitin_id').value = sitinId;
-    bootstrap.Modal.getInstance(document.getElementById('historyModal')).hide();
-    setTimeout(() => {
-        new bootstrap.Modal(document.getElementById('feedbackModal')).show();
-    }, 400);
+    const hist = bootstrap.Modal.getInstance(document.getElementById('historyModal'));
+    if (hist) hist.hide();
+    setTimeout(() => new bootstrap.Modal(document.getElementById('feedbackModal')).show(), 400);
 }
-
-<?php if (isset($feedback_success) || isset($feedback_error)): ?>
-document.addEventListener('DOMContentLoaded', function() {
-    new bootstrap.Modal(document.getElementById('historyModal')).show();
-});
-<?php endif; ?>
-
-// ── PC Status Checker ───────────────────────────────────────────────
-let lastCheckTime = new Date();
-
-function checkPCStatusUpdates() {
-    fetch('check_pc_updates.php?last_check=' + lastCheckTime.toISOString())
-        .then(response => response.json())
-        .then(data => {
-            if (data.updates && data.updates.length > 0) {
-                // Show notification for new updates
-                data.updates.forEach(update => {
-                    Swal.fire({
-                        title: 'PC Status Update',
-                        html: `Lab ${update.lab_name}, PC #${update.pc_number} is now <strong>${update.new_status}</strong><br>
-                               <small>${update.notes || 'No additional notes'}</small>`,
-                        icon: update.new_status === 'available' ? 'success' : 'warning',
-                        toast: true,
-                        position: 'top-end',
-                        showConfirmButton: false,
-                        timer: 5000,
-                        timerProgressBar: true
-                    });
-                });
-                // Refresh the alerts area
-                location.reload();
-            }
-            lastCheckTime = new Date();
-        })
-        .catch(error => console.log('Error checking PC updates:', error));
-}
-
-// Check for updates every 30 seconds
-setInterval(checkPCStatusUpdates, 30000);
-
 </script>
 </body>
 </html>

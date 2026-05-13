@@ -37,6 +37,52 @@ CREATE TABLE `announcements` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `lab_config`
+--
+
+CREATE TABLE `lab_config` (
+  `id` int(11) NOT NULL,
+  `lab_name` varchar(50) NOT NULL,
+  `total_pcs` int(11) DEFAULT 50,
+  `created_at` datetime DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `pc_status`
+--
+
+CREATE TABLE `pc_status` (
+  `id` int(11) NOT NULL,
+  `lab_name` varchar(50) NOT NULL,
+  `pc_number` int(11) NOT NULL,
+  `status` varchar(50) DEFAULT 'available',
+  `notes` text DEFAULT NULL,
+  `updated_by` varchar(100) DEFAULT NULL,
+  `updated_at` datetime DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `pc_status_history`
+--
+
+CREATE TABLE `pc_status_history` (
+  `id` int(11) NOT NULL,
+  `lab_name` varchar(50) NOT NULL,
+  `pc_number` int(11) NOT NULL,
+  `old_status` varchar(50) DEFAULT NULL,
+  `new_status` varchar(50) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `changed_by` varchar(100) DEFAULT NULL,
+  `changed_at` datetime DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `sitin_records`
 --
 
@@ -96,6 +142,26 @@ ALTER TABLE `announcements`
   ADD PRIMARY KEY (`id`);
 
 --
+-- Indexes for table `lab_config`
+--
+ALTER TABLE `lab_config`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `lab_name` (`lab_name`);
+
+--
+-- Indexes for table `pc_status`
+--
+ALTER TABLE `pc_status`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `lab_pc` (`lab_name`,`pc_number`);
+
+--
+-- Indexes for table `pc_status_history`
+--
+ALTER TABLE `pc_status_history`
+  ADD PRIMARY KEY (`id`);
+
+--
 -- Indexes for table `sitin_records`
 --
 ALTER TABLE `sitin_records`
@@ -117,6 +183,24 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `announcements`
 --
 ALTER TABLE `announcements`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `lab_config`
+--
+ALTER TABLE `lab_config`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `pc_status`
+--
+ALTER TABLE `pc_status`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `pc_status_history`
+--
+ALTER TABLE `pc_status_history`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
