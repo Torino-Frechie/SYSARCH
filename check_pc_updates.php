@@ -7,7 +7,8 @@ if (!isset($_SESSION['user']) && !isset($_SESSION['admin'])) {
     exit();
 }
 
-$conn = new mysqli("their-host", "their-username", "their-password", "their-dbname");if ($conn->connect_error) {
+$conn = new mysqli("localhost", "root", "", "sysarch");
+if ($conn->connect_error) {
     echo json_encode(['updates' => []]);
     exit();
 }

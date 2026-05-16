@@ -6,7 +6,7 @@ if (!isset($_SESSION['user'])) {
     exit();
 }
 
-$conn = new mysqli("their-host", "their-username", "their-password", "their-dbname");
+$conn = new mysqli("localhost", "root", "", "sysarch");
 if ($conn->connect_error) die("Connection failed: " . $conn->connect_error);
 
 $id_number = $_SESSION['user'];

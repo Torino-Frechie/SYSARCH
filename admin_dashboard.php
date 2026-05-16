@@ -5,7 +5,7 @@ if (!isset($_SESSION['admin'])) {
     exit();
 }
 
-$conn = new mysqli("their-host", "their-username", "their-password", "their-dbname");
+$conn = new mysqli("localhost", "root", "", "sysarch");
 if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
