@@ -17,8 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header("Location: login.php");
         exit();
     } else {
-        $conn = new mysqli("localhost", "root", "", "sysarch");
-        if ($conn->connect_error) die("Connection failed: " . $conn->connect_error);
+$conn = new mysqli("their-host", "their-username", "their-password", "their-dbname");        if ($conn->connect_error) die("Connection failed: " . $conn->connect_error);
 
         $stmt = $conn->prepare("SELECT * FROM users WHERE id_number = ?");
         $stmt->bind_param("s", $id_number);

@@ -10,8 +10,7 @@ $db   = 'sysarch';
 $user = 'root';
 $pass = '';
 
-$conn = new mysqli($host, $user, $pass, $db);
-
+$conn = new mysqli("their-host", "their-username", "their-password", "their-dbname");
 $top10 = [];
 
 if (!$conn->connect_error) {
