@@ -70,6 +70,7 @@ function formatDuration($minutes) {
     <title>CCS Sit-in Monitoring System</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <style>
         :root {
             --blue:        #2564ebbb;
@@ -518,11 +519,16 @@ function formatDuration($minutes) {
         </button>
         <div class="collapse navbar-collapse" id="mainNav">
             <ul class="navbar-nav ms-auto align-items-center gap-1 py-2 py-lg-0">
-                <?php foreach ($nav_items as $name => $url): ?>
-                    <li class="nav-item">
-                        <a class="nav-link" href="<?= $url ?>"><?= $name ?></a>
-                    </li>
-                <?php endforeach; ?>
+                <li class="nav-item">
+                    <a href="landingpage.php" style="color:var(--gray-600);font-weight:500;font-size:.85rem;padding:6px 14px;border-radius:8px;text-decoration:none;display:flex;align-items:center;gap:5px;">
+                        <i class="bi bi-house"></i> Home
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="about.php" style="color:var(--gray-600);font-weight:500;font-size:.85rem;padding:6px 14px;border-radius:8px;text-decoration:none;display:flex;align-items:center;gap:5px;">
+                        <i class="bi bi-info-circle"></i> About
+                    </a>
+                </li>
                 <li class="nav-item ms-2">
                     <a class="btn-nav-login" href="login.php">Log In</a>
                 </li>

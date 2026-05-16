@@ -369,18 +369,18 @@ $error_msg    = $_GET['error'] ?? '';
         * { box-sizing:border-box; }
         body { font-family:'Poppins',sans-serif; background:var(--gray-50); margin:0; overflow-x:hidden; }
 
-        .top-navbar { position:fixed; top:0; left:0; width:100%; height:60px; z-index:1000; display:flex; align-items:center; justify-content:space-between; padding:0 12px; background:var(--blue-deeper); box-shadow:0 4px 12px rgba(37,99,235,0.08); gap:10px; }
+        .top-navbar { position:fixed; top:0; left:0; width:100%; height:60px; z-index:1000; display:flex; align-items:center; justify-content:space-between; padding:0 12px; background:var(--white); box-shadow:0 4px 12px rgba(37,99,235,0.08); gap:10px; }
         .nav-left { flex-shrink:0; }
-        .nav-left .brand-title { color:white; font-weight:700; font-size:.9rem; white-space:nowrap; }
+        .nav-left .brand-title { color:black; font-weight:700; font-size:.9rem; white-space:nowrap; }
         .nav-links { display:flex; align-items:center; gap:2px; overflow:hidden; flex:1; justify-content:flex-end; }
-        .nav-links a { display:flex; flex-direction:column; align-items:center; justify-content:center; color:rgba(255,255,255,.75); text-decoration:none; padding:4px 6px; border-radius:8px; font-size:.6rem; transition:all .2s; white-space:nowrap; min-width:44px; }
+        .nav-links a { display:flex; flex-direction:column; align-items:center; justify-content:center; color:rgba(0, 0, 0, 0.75); text-decoration:none; padding:4px 6px; border-radius:8px; font-size:.6rem; transition:all .2s; white-space:nowrap; min-width:44px; }
         .nav-links a i { font-size:.95rem; margin-bottom:1px; }
         .nav-links a span { font-size:.58rem; line-height:1; }
-        .nav-links a:hover { background:rgba(255,255,255,.15); color:white; }
-        .nav-links a.active { background:rgba(255,255,255,.22); color:white; font-weight:600; }
-        .btn-logout-top { display:flex; flex-direction:column; align-items:center; justify-content:center; flex-shrink:0; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.18); color:white; padding:4px 10px; border-radius:8px; font-size:.6rem; font-weight:600; text-decoration:none; transition:all .2s; min-width:44px; }
+        .nav-links a:hover { background:rgba(255,255,255,.15); color:var(--blue); }
+        .nav-links a.active { background:rgba(255,255,255,.22); color:var(--blue); font-weight:600; }
+        .btn-logout-top { display:flex; flex-direction:column; align-items:center; justify-content:center; flex-shrink:0; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.18); color:black; padding:4px 10px; border-radius:8px; font-size:.6rem; font-weight:600; text-decoration:none; transition:all .2s; min-width:44px; }
         .btn-logout-top i { font-size:.95rem; margin-bottom:1px; }
-        .btn-logout-top:hover { background:var(--blue-mid); color:white; }
+        .btn-logout-top:hover { background:var(--blue); color:black; }
 
         .main-content { margin-top:60px; padding:0; min-height:100vh; }
         .top-hero { background:linear-gradient(135deg,var(--blue-deeper) 0%,var(--blue) 100%); padding:22px 28px 60px; color:white; }
@@ -1435,31 +1435,237 @@ function toggleEdit(id) {
 
 <!-- ══════════════ FEEDBACK TAB ══════════════ -->
 <?php elseif ($active_tab === 'feedback'): ?>
-<div class="dash-card">
-    <div class="card-header-purple"><span><i class="bi bi-chat-left-text-fill me-2"></i>Student Feedback</span></div>
-    <div class="card-body p-3">
-        <?php
-        $feedback_check = $conn->query("SHOW TABLES LIKE 'feedback'");
-        if ($feedback_check && $feedback_check->num_rows > 0):
-            $fb = $conn->query("SELECT f.*, CONCAT(COALESCE(u.first_name,''),' ',COALESCE(u.last_name,'')) AS student_name, sr.purpose,sr.lab,sr.login_time FROM feedback f LEFT JOIN users u ON f.id_number=u.id_number LEFT JOIN sitin_records sr ON f.sitin_id=sr.id ORDER BY f.created_at DESC");
-            if ($fb && $fb->num_rows > 0): ?>
-            <table id="feedbackTable" class="table table-bordered table-hover w-100">
-                <thead><tr><th>#</th><th>Student</th><th>ID Number</th><th>Lab</th><th>Purpose</th><th>Session Date</th><th>Feedback</th><th>Submitted</th></tr></thead>
-                <tbody>
-                <?php while ($f = $fb->fetch_assoc()): ?>
-                    <tr>
-                        <td><?=$f['id']?></td><td><?=htmlspecialchars(trim($f['student_name'])?:'—')?></td><td><?=htmlspecialchars($f['id_number'])?></td>
-                        <td><?=htmlspecialchars($f['lab']??'—')?></td><td><?=htmlspecialchars($f['purpose']??'—')?></td><td><?=htmlspecialchars($f['login_time']??'—')?></td>
-                        <td style="max-width:240px;"><div style="font-size:.81rem;color:#333;font-style:italic;">"<?=htmlspecialchars($f['message'])?>"</div></td>
-                        <td><?=htmlspecialchars($f['created_at'])?></td>
-                    </tr>
-                <?php endwhile; ?>
-                </tbody>
-            </table>
-        <?php else: ?><p class="text-muted mb-0"><i class="bi bi-inbox me-2"></i>No feedback submitted yet.</p><?php endif;
-        else: ?><p class="text-muted mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Feedback table not found.</p><?php endif; ?>
+
+<?php
+$feedback_check = $conn->query("SHOW TABLES LIKE 'feedback'");
+$fb_rows = [];
+if ($feedback_check && $feedback_check->num_rows > 0) {
+    $fb = $conn->query("
+        SELECT f.*,
+               CONCAT(COALESCE(u.first_name,''),' ',COALESCE(u.last_name,'')) AS student_name,
+               sr.purpose, sr.lab, sr.login_time
+        FROM feedback f
+        LEFT JOIN users u ON f.id_number = u.id_number
+        LEFT JOIN sitin_records sr ON f.sitin_id = sr.id
+        ORDER BY f.created_at DESC
+    ");
+    if ($fb) while ($row = $fb->fetch_assoc()) $fb_rows[] = $row;
+}
+$total_fb = count($fb_rows);
+?>
+
+<!-- Stats row -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div style="background:linear-gradient(135deg,#1E3A8A,#2563EB);border-radius:14px;padding:20px 22px;color:#fff;">
+            <div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;opacity:.75;">Total Feedback</div>
+            <div style="font-size:2rem;font-weight:800;line-height:1;margin-top:6px;"><?= $total_fb ?></div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div style="background:#fff;border:1px solid #e8eaf0;border-radius:14px;padding:20px 22px;">
+            <div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#aaa;">Today</div>
+            <div style="font-size:2rem;font-weight:800;line-height:1;margin-top:6px;color:#2563EB;">
+                <?= count(array_filter($fb_rows, fn($r) => date('Y-m-d', strtotime($r['created_at'])) === date('Y-m-d'))) ?>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div style="background:#fff;border:1px solid #e8eaf0;border-radius:14px;padding:20px 22px;">
+            <div style="font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#aaa;">This Week</div>
+            <div style="font-size:2rem;font-weight:800;line-height:1;margin-top:6px;color:#2563EB;">
+                <?= count(array_filter($fb_rows, fn($r) => strtotime($r['created_at']) >= strtotime('-7 days'))) ?>
+            </div>
+        </div>
     </div>
 </div>
+
+<!-- Main card -->
+<div class="dash-card">
+    <div class="card-header-purple d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-chat-left-text-fill me-2"></i>Student Feedback</span>
+        <span style="font-size:.75rem;opacity:.8;"><?= $total_fb ?> total responses</span>
+    </div>
+    <div class="card-body p-3">
+
+        <?php if (empty($fb_rows)): ?>
+            <div style="text-align:center;padding:60px 20px;">
+                <i class="bi bi-chat-square-dots" style="font-size:3rem;color:#ddd;display:block;margin-bottom:14px;"></i>
+                <div style="font-weight:700;font-size:.95rem;color:#444;">No feedback submitted yet.</div>
+                <div style="font-size:.82rem;color:#aaa;margin-top:4px;">Feedback from students will appear here after their sessions.</div>
+            </div>
+
+        <?php else: ?>
+
+            <!-- Search + filter bar -->
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <div style="position:relative;">
+                    <i class="bi bi-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#aaa;font-size:.8rem;"></i>
+                    <input type="text" id="fbSearch" class="form-control form-control-sm"
+                           placeholder="Search student, lab, feedback..."
+                           style="padding-left:30px;width:240px;border-radius:20px;"
+                           oninput="fbFilter()">
+                </div>
+                <div class="d-flex gap-2 align-items-center" style="font-size:.82rem;color:#555;">
+                    Show
+                    <select id="fbPageSize" class="form-select form-select-sm" style="width:70px;" onchange="fbFilter()">
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                    </select>
+                    entries
+                </div>
+            </div>
+
+            <!-- Feedback cards grid -->
+            <div id="fbGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;"></div>
+
+            <!-- Empty search state -->
+            <div id="fbEmpty" style="display:none;text-align:center;padding:40px 20px;">
+                <i class="bi bi-search" style="font-size:2rem;color:#ddd;display:block;margin-bottom:10px;"></i>
+                <div style="font-size:.85rem;color:#aaa;">No feedback matches your search.</div>
+            </div>
+
+            <!-- Pagination -->
+            <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+                <div id="fbInfo" style="font-size:.8rem;color:#777;"></div>
+                <div id="fbPagination" class="d-flex gap-1 flex-wrap"></div>
+            </div>
+
+        <?php endif; ?>
+    </div>
+</div>
+
+<?php if (!empty($fb_rows)): ?>
+<script>
+const fbData = <?= json_encode(array_values($fb_rows)) ?>;
+let fbPage = 1;
+let fbFiltered = [];
+
+function getInitials(name) {
+    return name.trim().split(' ').slice(0,2).map(p => p[0]?.toUpperCase() || '').join('') || '?';
+}
+
+function timeAgo(dateStr) {
+    const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+    if (diff < 604800) return Math.floor(diff/86400) + 'd ago';
+    return new Date(dateStr).toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'});
+}
+
+const avatarColors = [
+    {bg:'#ede8ff',color:'#4f3bffcc'},
+    {bg:'#dbeafe',color:'#1d4ed8'},
+    {bg:'#d1fae5',color:'#065f46'},
+    {bg:'#fce7f3',color:'#9d174d'},
+    {bg:'#fef3c7',color:'#92400e'},
+    {bg:'#cffafe',color:'#0e7490'},
+];
+
+function fbFilter() {
+    const search = document.getElementById('fbSearch').value.toLowerCase();
+    fbFiltered = fbData.filter(r =>
+        (r.student_name + r.id_number + r.lab + r.purpose + r.message)
+        .toLowerCase().includes(search)
+    );
+    fbPage = 1;
+    fbRender();
+}
+
+function fbRender() {
+    const pageSize = parseInt(document.getElementById('fbPageSize').value);
+    const total = fbFiltered.length;
+    const pages = Math.max(1, Math.ceil(total / pageSize));
+    if (fbPage > pages) fbPage = 1;
+    const start = (fbPage - 1) * pageSize;
+    const pageRows = fbFiltered.slice(start, start + pageSize);
+
+    const grid = document.getElementById('fbGrid');
+    const empty = document.getElementById('fbEmpty');
+
+    if (pageRows.length === 0) {
+        grid.innerHTML = '';
+        empty.style.display = '';
+    } else {
+        empty.style.display = 'none';
+        grid.innerHTML = pageRows.map((r, i) => {
+            const name = r.student_name?.trim() || '—';
+            const initials = getInitials(name);
+            const av = avatarColors[(r.id || i) % avatarColors.length];
+            const lab = r.lab || '—';
+            const purpose = r.purpose || '—';
+            const date = r.login_time ? new Date(r.login_time).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
+            const ago = timeAgo(r.created_at);
+
+            return `
+            <div style="background:#fff;border:1px solid #e8eaf0;border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:12px;transition:box-shadow .2s;"
+                 onmouseover="this.style.boxShadow='0 4px 18px rgba(80,40,140,0.10)';this.style.borderColor='#BFDBFE';"
+                 onmouseout="this.style.boxShadow='none';this.style.borderColor='#e8eaf0';">
+
+                <!-- Top: avatar + name -->
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <div style="width:38px;height:38px;border-radius:50%;background:${av.bg};color:${av.color};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.8rem;flex-shrink:0;">
+                        ${initials}
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-weight:700;font-size:.85rem;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</div>
+                        <div style="font-size:.72rem;color:#aaa;">${r.id_number}</div>
+                    </div>
+                    <div style="font-size:.7rem;color:#aaa;white-space:nowrap;">${ago}</div>
+                </div>
+
+                <!-- Feedback message -->
+                <div style="background:#f8f5ff;border-left:3px solid #2563EB;border-radius:0 8px 8px 0;padding:10px 12px;">
+                    <i class="bi bi-quote" style="color:#2563EB;font-size:.9rem;"></i>
+                    <span style="font-size:.82rem;color:#444;font-style:italic;line-height:1.6;">${r.message}</span>
+                </div>
+
+                <!-- Meta chips -->
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                    <span style="background:#DBEAFE;color:#1D4ED8;border-radius:6px;padding:2px 9px;font-size:.7rem;font-weight:600;">
+                        <i class="bi bi-pc-display-horizontal me-1"></i>Lab ${lab}
+                    </span>
+                    <span style="background:#f0fdf4;color:#166534;border-radius:6px;padding:2px 9px;font-size:.7rem;font-weight:600;">
+                        <i class="bi bi-calendar3 me-1"></i>${date}
+                    </span>
+                    <span style="background:#fef9ee;color:#92400e;border-radius:6px;padding:2px 9px;font-size:.7rem;font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${purpose}">
+                        <i class="bi bi-mortarboard me-1"></i>${purpose}
+                    </span>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    // Entry info
+    const info = document.getElementById('fbInfo');
+    info.textContent = total === 0 ? 'No entries' :
+        'Showing ' + (start + 1) + ' to ' + Math.min(start + pageSize, total) + ' of ' + total + ' entries';
+
+    // Pagination
+    const pag = document.getElementById('fbPagination');
+    const btn = (label, page, disabled, active) =>
+        `<button onclick="fbGoPage(${page})" ${disabled?'disabled':''} style="border:1px solid ${active?'#2563EB':'#ddd'};background:${active?'#2563EB':'#fff'};color:${active?'#fff':'#555'};border-radius:6px;padding:3px 9px;font-size:.78rem;cursor:${disabled?'default':'pointer'};">${label}</button>`;
+
+    let html = btn('«', 1, fbPage===1, false) + btn('‹', fbPage-1, fbPage===1, false);
+    for (let p = 1; p <= pages; p++) html += btn(p, p, false, p===fbPage);
+    html += btn('›', fbPage+1, fbPage===pages, false) + btn('»', pages, fbPage===pages, false);
+    pag.innerHTML = html;
+}
+
+function fbGoPage(p) {
+    const pageSize = parseInt(document.getElementById('fbPageSize').value);
+    const pages = Math.max(1, Math.ceil(fbFiltered.length / pageSize));
+    fbPage = Math.min(Math.max(1, p), pages);
+    fbRender();
+}
+
+// Init
+fbFiltered = [...fbData];
+fbRender();
+</script>
+<?php endif; ?>
 
 <!-- ══════════════ RESERVATION TAB ══════════════ -->
 <?php elseif ($active_tab === 'reservation'): ?>

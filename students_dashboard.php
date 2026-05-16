@@ -211,7 +211,7 @@ $time_slots = [
     <style>
         :root {
             --blue:        #2564ebbb;
-            --blue-dark:   #1D4ED8;
+            --blue-dark:    #1d4fd8ce;
             --blue-deeper: #1E3A8A;
             --blue-light:  #DBEAFE;
             --blue-mid:    #3B82F6;
@@ -280,9 +280,9 @@ $time_slots = [
             box-shadow: 0 6px 24px #c5c2f162;
             border: 1px solid rgba(0,0,0,0.04); overflow: hidden; margin-bottom: 20px;
         }
-        .card-header-purple { background: linear-gradient(135deg, var(--ccs-purple), rgba(21, 43, 241, 0.8)); color: black; font-weight: 600; font-size: 0.88rem; padding: 11px 18px; }
-        .card-header-gold   { background: var(--ccs-purple); color: #000000; font-weight: 700; font-size: 0.88rem; padding: 11px 18px; }
-        .card-header-blue   { background: linear-gradient(135deg, var(--ccs-purple), rgba(21, 43, 241, 0.8));  color: black; font-weight: 600; font-size: 0.88rem; padding: 11px 18px; }
+        .card-header-purple { background: linear-gradient(135deg, var(--ccs-purple), rgba(21, 43, 241, 0.8)); color: white; font-weight: 600; font-size: 0.88rem; padding: 11px 18px; }
+        .card-header-gold   { background: var(--ccs-purple); color: #ffffff; font-weight: 700; font-size: 0.88rem; padding: 11px 18px; }
+        .card-header-blue   { background: linear-gradient(135deg, var(--ccs-purple), rgba(21, 43, 241, 0.8));  color: white; font-weight: 600; font-size: 0.88rem; padding: 11px 18px; }
 
         .avatar-wrap { position: relative; width: 90px; height: 90px; margin: 0 auto 10px; }
         .avatar-img  { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 4px solid white; box-shadow: 0 4px 14px rgba(151,87,214,0.25); }
