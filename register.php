@@ -17,25 +17,35 @@
 
     <style>
         :root {
-            --uc-blue: #a1cbf7;
-            --ccs-purple: #4b2a6d;
+           margin: ; --blue:        #2563EB;
+            --blue-dark:   #1D4ED8;
+            --blue-light:  #DBEAFE;
+            --white:       #FFFFFF;
+            --gray-50:     #F8FAFC;
+            --gray-100:    #F1F5F9;
+            --gray-200:    #E2E8F0;
+            --gray-400:    #94A3B8;
+            --gray-600:    #475569;
+            --gray-800:    #1E293B;
         }
 
         body {
             font-family: 'Poppins', sans-serif;
-            background-color: #f4f7f6;
-            margin: 0;
+            background: var(--gray-50);
+            min-height: 100vh;
         }
 
         .navbar {
-            background-color: var(--uc-blue);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            background: var(--white);
+            border-bottom: 1px solid var(--gray-200);
+            box-shadow: 0 1px 10px rgba(37,99,235,0.07);
+            height: 64px;
         }
 
         .navbar-brand {
-            font-weight: 300;
-            color: white !important;
-            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--gray-800) !important;
+            font-size: .9rem;
         }
 
         .registration-container {
@@ -44,56 +54,70 @@
         }
 
         .registration-card {
-            background: white;
-            border-radius: 20px;
+            background: var(--white);
+            border-radius: 24px;
             padding: 40px;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.08);
-            border: 1px solid rgba(0,0,0,0.05);
+            box-shadow: 0 20px 60px rgba(37,99,235,0.10);
+            border: 1px solid var(--gray-200);
         }
 
         .btn-back {
-            background-color: #dc3545;
-            color: white;
-            border: none;
-            padding: 5px 15px;
-            border-radius: 5px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--gray-400);
+            font-size: .78rem;
+            font-weight: 500;
             text-decoration: none;
-            font-size: 0.8rem;
-            transition: 0.3s;
+            margin-bottom: 24px;
+            background: none;
+            padding: 0;
         }
 
         .btn-back:hover {
-            background-color: #a71d2a;
-            color: white;
+            color: var(--blue);
         }
 
         .form-label {
             font-weight: 600;
-            color: var(--ccs-purple);
-            margin-top: 15px;
+            color: var(--gray-600);
+            margin-bottom: 6px;
+            font-size: .82rem;
         }
 
-        .form-control {
-            border-radius: 8px;
-            border: 1px solid #ced4da;
-            padding: 10px;
+        .form-control,
+        .form-select {
+            border-radius: 10px;
+            border: 1.5px solid var(--gray-200);
+            padding: 12px 14px;
+            font-size: .85rem;
+            background: var(--gray-50);
+            transition: .2s;
         }
 
-        .btn-register-submit {
-            background-color: #007bff;
+        .form-control:focus,
+        .form-select:focus {
+            border-color: var(--blue);
+            box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+            background: var(--white);
+        }
+
+       .btn-register-submit {
+            background: var(--blue);
             color: white;
-            font-weight: 600;
+            font-weight: 700;
             width: 100%;
-            padding: 12px;
-            border-radius: 8px;
-            margin-top: 30px;
+            padding: 13px;
+            border-radius: 10px;
             border: none;
-            transition: 0.3s;
+            transition: .2s;
+            margin-top: 20px;
         }
 
         .btn-register-submit:hover {
-            background-color: #0056b3;
-            transform: translateY(-2px);
+            background: var(--blue-dark);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 16px rgba(37,99,235,0.25);
         }
 
         @media (max-width: 768px) {
@@ -123,7 +147,7 @@
     <div class="registration-container">
         <div class="registration-card">
 
-            <a href="landingpage.php" class="btn-back">Back</a>
+           <a href="landingpage.php" class="btn-back">← Back to Home</a>
 
             <?php if (isset($_GET['success']) && $_GET['success'] == '1'): ?>
                 <div class="alert alert-success mt-3" role="alert">
@@ -132,8 +156,10 @@
                 </div>
             <?php endif; ?>
 
-            <h2 class="text-center fw-bold mb-4" style="color: var(--ccs-purple);">
-                Sign up
+            <h2 class="fw-bold mb-1" style="color: var(--gray-800);">
+             <p style="color: var(--gray-400); font-size:.85rem; margin-bottom:25px;">
+            Create your student account to continue
+            </p>
             </h2>
 
             <form action="process_registration.php" method="POST">

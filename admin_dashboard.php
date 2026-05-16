@@ -349,11 +349,27 @@ $error_msg    = $_GET['error'] ?? '';
     <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --uc-blue:#a1cbf7; --ccs-purple:#9757d6; --ccs-gold:#FFD700; }
+        :root {
+            --blue:        #2564ebbb;
+            --blue-dark:   #1D4ED8;
+            --blue-deeper: #1E3A8A;
+            --blue-light:  #DBEAFE;
+            --blue-mid:    #3B82F6;
+            --white:       #FFFFFF;
+            --gray-50:     #F8FAFC;
+            --gray-100:    #F1F5F9;
+            --gray-200:    #E2E8F0;
+            --gray-400:    #94A3B8;
+            --gray-600:    #475569;
+            --gray-800:    #1E293B;
+            --uc-blue:    var(--blue);
+            --ccs-purple: var(--blue-mid);
+            --ccs-gold:   var(--blue-mid);
+        }
         * { box-sizing:border-box; }
-        body { font-family:'Poppins',sans-serif; background:#f4f7f6; margin:0; overflow-x:hidden; }
+        body { font-family:'Poppins',sans-serif; background:var(--gray-50); margin:0; overflow-x:hidden; }
 
-        .top-navbar { position:fixed; top:0; left:0; width:100%; height:60px; z-index:1000; display:flex; align-items:center; justify-content:space-between; padding:0 12px; background:var(--ccs-purple); box-shadow:0 4px 12px rgba(0,0,0,0.15); gap:10px; }
+        .top-navbar { position:fixed; top:0; left:0; width:100%; height:60px; z-index:1000; display:flex; align-items:center; justify-content:space-between; padding:0 12px; background:var(--blue-deeper); box-shadow:0 4px 12px rgba(37,99,235,0.08); gap:10px; }
         .nav-left { flex-shrink:0; }
         .nav-left .brand-title { color:white; font-weight:700; font-size:.9rem; white-space:nowrap; }
         .nav-links { display:flex; align-items:center; gap:2px; overflow:hidden; flex:1; justify-content:flex-end; }
@@ -362,28 +378,28 @@ $error_msg    = $_GET['error'] ?? '';
         .nav-links a span { font-size:.58rem; line-height:1; }
         .nav-links a:hover { background:rgba(255,255,255,.15); color:white; }
         .nav-links a.active { background:rgba(255,255,255,.22); color:white; font-weight:600; }
-        .btn-logout-top { display:flex; flex-direction:column; align-items:center; justify-content:center; flex-shrink:0; background:rgba(0,0,0,.15); border:1px solid rgba(255,255,255,.25); color:#000; padding:4px 10px; border-radius:8px; font-size:.6rem; font-weight:600; text-decoration:none; transition:all .2s; min-width:44px; }
+        .btn-logout-top { display:flex; flex-direction:column; align-items:center; justify-content:center; flex-shrink:0; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.18); color:white; padding:4px 10px; border-radius:8px; font-size:.6rem; font-weight:600; text-decoration:none; transition:all .2s; min-width:44px; }
         .btn-logout-top i { font-size:.95rem; margin-bottom:1px; }
-        .btn-logout-top:hover { background:var(--ccs-purple); color:white; }
+        .btn-logout-top:hover { background:var(--blue-mid); color:white; }
 
         .main-content { margin-top:60px; padding:0; min-height:100vh; }
-        .top-hero { background:linear-gradient(135deg,var(--ccs-purple) 0%,var(--uc-blue) 100%); padding:22px 28px 60px; color:white; }
+        .top-hero { background:linear-gradient(135deg,var(--blue-deeper) 0%,var(--blue) 100%); padding:22px 28px 60px; color:white; }
         .top-hero h4 { font-weight:800; font-size:1.3rem; margin:0; color:white; }
         .admin-badge { background:rgba(255,255,255,.2); color:white; border:1px solid rgba(255,255,255,.3); border-radius:20px; padding:4px 14px; font-size:.78rem; font-weight:600; }
         .content-area { padding:0 24px 30px; margin-top:-36px; }
 
-        .stat-card { background:white; border-radius:18px; padding:1.1rem 1.3rem; box-shadow:0 8px 24px rgba(151,87,214,.12); display:flex; align-items:center; gap:14px; border:1px solid rgba(0,0,0,.04); }
+        .stat-card { background:white; border-radius:18px; padding:1.1rem 1.3rem; box-shadow:0 8px 24px rgba(37,99,235,0.08); display:flex; align-items:center; gap:14px; border:1px solid rgba(0,0,0,.04); }
         .stat-icon { width:50px; height:50px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:1.2rem; }
-        .stat-icon.purple { background:linear-gradient(135deg,var(--ccs-purple),#b47ee8); color:white; }
-        .stat-icon.blue   { background:linear-gradient(135deg,#4da8f5,var(--uc-blue)); color:white; }
-        .stat-icon.gold   { background:linear-gradient(135deg,#f7c948,var(--ccs-gold)); color:#7a5c00; }
+        .stat-icon.purple { background:linear-gradient(135deg,var(--blue-mid),var(--blue-dark)); color:white; }
+        .stat-icon.blue   { background:linear-gradient(135deg,var(--blue),var(--blue-mid)); color:white; }
+        .stat-icon.gold   { background:linear-gradient(135deg,var(--blue-dark),var(--blue-deeper)); color:white; }
         .stat-num   { font-size:1.7rem; font-weight:800; color:#222; line-height:1; }
         .stat-label { font-size:.72rem; color:#aaa; margin-top:2px; }
 
         .dash-card { background:white; border-radius:18px; box-shadow:0 4px 20px rgba(151,87,214,.08); border:1px solid rgba(0,0,0,.04); overflow:hidden; }
-        .card-header-purple { background:linear-gradient(135deg,var(--ccs-purple),#7c45b8); color:white; font-weight:600; font-size:.88rem; padding:12px 18px; display:flex; align-items:center; justify-content:space-between; }
-        .card-header-gold   { background:var(--ccs-gold); color:#4a3800; font-weight:700; font-size:.88rem; padding:12px 18px; display:flex; align-items:center; justify-content:space-between; }
-        .card-header-blue   { background:linear-gradient(135deg,#3a9bd5,#5ab4f0); color:white; font-weight:600; font-size:.88rem; padding:12px 18px; display:flex; align-items:center; justify-content:space-between; }
+        .card-header-purple { background:linear-gradient(135deg,var(--blue-mid),var(--blue-dark)); color:white; font-weight:600; font-size:.88rem; padding:12px 18px; display:flex; align-items:center; justify-content:space-between; }
+        .card-header-gold   { background:var(--blue-dark); color:white; font-weight:700; font-size:.88rem; padding:12px 18px; display:flex; align-items:center; justify-content:space-between; }
+        .card-header-blue   { background:linear-gradient(135deg,var(--blue),var(--blue-mid)); color:white; font-weight:600; font-size:.88rem; padding:12px 18px; display:flex; align-items:center; justify-content:space-between; }
         .card-header-green  { background:linear-gradient(135deg,#27ae60,#1e8449); color:white; font-weight:600; font-size:.88rem; padding:12px 18px; display:flex; align-items:center; justify-content:space-between; }
 
         .pc-grid { display:grid; grid-template-columns:repeat(10,1fr); gap:8px; padding:15px; }
@@ -394,57 +410,57 @@ $error_msg    = $_GET['error'] ?? '';
         .pc-card.in_use      { background:linear-gradient(135deg,#d4e6f1,#a9cce3); color:#1a5276; border:2px solid #3498db; }
         .pc-card:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,.15); }
 
-        .table thead th { background:linear-gradient(135deg,var(--ccs-purple),#7c45b8); color:white; font-size:.78rem; font-weight:600; border:none; padding:9px 11px; }
+        .table thead th { background:linear-gradient(135deg,var(--blue-mid),var(--blue-dark)); color:white; font-size:.78rem; font-weight:600; border:none; padding:9px 11px; }
         .table tbody td { font-size:.81rem; vertical-align:middle; color:#333; }
-        .table tbody tr:hover { background:#f8f1fe; }
+        .table tbody tr:hover { background:#eff6ff; }
         .table { margin-bottom:0; }
 
         .dataTables_wrapper .dataTables_filter input,
         .dataTables_wrapper .dataTables_length select { border:1px solid #ddd; border-radius:8px; padding:5px 10px; font-family:'Poppins',sans-serif; font-size:.81rem; }
 
-        .badge-active   { background:linear-gradient(135deg,#27ae60,#2ecc71); color:white; padding:3px 9px; border-radius:20px; font-size:.7rem; font-weight:600; }
+        .badge-active   { background:linear-gradient(135deg,var(--blue-mid),var(--blue-dark)); color:white; padding:3px 9px; border-radius:20px; font-size:.7rem; font-weight:600; }
         .badge-done     { background:#bdc3c7; color:#555; padding:3px 9px; border-radius:20px; font-size:.7rem; font-weight:600; }
         .badge-pending  { background:linear-gradient(135deg,#f39c12,#e67e22); color:white; padding:3px 9px; border-radius:20px; font-size:.7rem; font-weight:600; }
-        .badge-approved { background:linear-gradient(135deg,#27ae60,#2ecc71); color:white; padding:3px 9px; border-radius:20px; font-size:.7rem; font-weight:600; }
+        .badge-approved { background:linear-gradient(135deg,var(--blue-mid),var(--blue-dark)); color:white; padding:3px 9px; border-radius:20px; font-size:.7rem; font-weight:600; }
         .badge-rejected { background:linear-gradient(135deg,#e74c3c,#c0392b); color:white; padding:3px 9px; border-radius:20px; font-size:.7rem; font-weight:600; }
 
-        .btn-purple { background:linear-gradient(135deg,var(--ccs-purple),#7c45b8); color:white; border:none; border-radius:8px; font-size:.81rem; font-weight:600; transition:opacity .2s; }
-        .btn-purple:hover { opacity:.88; color:white; }
-        .btn-gold-action { background:var(--ccs-gold); color:#4a3800; border:none; border-radius:8px; font-size:.81rem; font-weight:600; }
-        .btn-gold-action:hover { background:#e6c200; color:#333; }
+        .btn-purple { background:linear-gradient(135deg,var(--blue),var(--blue-mid)); color:white; border:none; border-radius:8px; font-size:.81rem; font-weight:600; transition:opacity .2s; }
+        .btn-purple:hover { background:var(--blue-dark); color:white; }
+        .btn-gold-action { background:var(--blue-light); color:var(--blue-dark); border:none; border-radius:8px; font-size:.81rem; font-weight:600; }
+        .btn-gold-action:hover { background:var(--blue-mid); color:white; }
         .btn-logout-tbl { background:linear-gradient(135deg,#e74c3c,#c0392b); color:white; border:none; border-radius:6px; padding:3px 10px; font-size:.75rem; font-weight:600; cursor:pointer; }
 
         .ann-item { padding:11px 0; border-bottom:1px solid #f0f0f0; }
         .ann-item:last-child { border-bottom:none; }
-        .ann-item h6 { color:var(--ccs-purple); font-weight:700; margin-bottom:2px; font-size:.86rem; }
+        .ann-item h6 { color:var(--blue-mid); font-weight:700; margin-bottom:2px; font-size:.86rem; }
 
-        .modal-header-purple { background:linear-gradient(135deg,var(--ccs-purple),#7c45b8); color:white; border-radius:12px 12px 0 0; padding:14px 20px; }
+        .modal-header-purple { background:linear-gradient(135deg,var(--blue),var(--blue-dark)); color:white; border-radius:12px 12px 0 0; padding:14px 20px; }
         .modal-header-purple .btn-close { filter:invert(1); }
-        .modal-content { border-radius:16px; border:none; box-shadow:0 20px 60px rgba(151,87,214,.2); }
-        .form-control:focus,.form-select:focus { border-color:var(--ccs-purple); box-shadow:0 0 0 3px rgba(151,87,214,.12); }
+        .modal-content { border-radius:16px; border:none; box-shadow:0 20px 60px rgba(37,99,235,0.12); }
+        .form-control:focus,.form-select:focus { border-color:var(--blue); box-shadow:0 0 0 3px rgba(37,99,235,0.15); }
 
         .result-item { padding:9px 11px; border-radius:8px; cursor:pointer; border:1px solid #eee; margin-bottom:5px; background:white; transition:background .15s; }
-        .result-item:hover { background:#f8f1fe; border-color:#d9b8f7; }
+        .result-item:hover { background:#eff6ff; border-color:#bfdbfe; }
         .result-item .r-name { font-weight:600; font-size:.86rem; color:#333; }
         .result-item .r-sub  { font-size:.75rem; color:#999; }
 
-        .selected-student-card { background:linear-gradient(135deg,#f8f1fe,#eef6ff); border-radius:12px; padding:.95rem 1.1rem; margin-bottom:.95rem; border:1px solid rgba(151,87,214,.15); }
-        .selected-student-card .label { font-size:.67rem; color:var(--ccs-purple); font-weight:700; text-transform:uppercase; letter-spacing:.08em; margin-bottom:7px; }
+        .selected-student-card { background:linear-gradient(135deg,#eff6ff,#dbeafe); border-radius:12px; padding:.95rem 1.1rem; margin-bottom:.95rem; border:1px solid rgba(59,130,246,.15); }
+        .selected-student-card .label { font-size:.67rem; color:var(--blue-mid); font-weight:700; text-transform:uppercase; letter-spacing:.08em; margin-bottom:7px; }
         .selected-student-card .val-title { font-size:.68rem; color:#999; }
         .selected-student-card .val { font-weight:700; color:#222; font-size:.86rem; }
 
         .announce-textarea { border:1px solid #ddd; border-radius:10px; padding:9px 11px; width:100%; font-family:'Poppins',sans-serif; font-size:.83rem; resize:vertical; min-height:75px; transition:border .2s,box-shadow .2s; }
-        .announce-textarea:focus { outline:none; border-color:var(--ccs-purple); box-shadow:0 0 0 3px rgba(151,87,214,.12); }
+        .announce-textarea:focus { outline:none; border-color:var(--blue); box-shadow:0 0 0 3px rgba(37,99,235,0.12); }
         .chart-wrapper { position:relative; height:240px; }
 
         .lab-selector { background:white; border-radius:12px; padding:10px; margin-bottom:18px; display:flex; gap:9px; flex-wrap:wrap; }
         .lab-btn { padding:7px 18px; border-radius:8px; background:#f0f0f0; color:#666; text-decoration:none; font-weight:600; transition:all .2s; font-size:.83rem; }
-        .lab-btn.active { background:linear-gradient(135deg,var(--ccs-purple),#7c45b8); color:white; }
+        .lab-btn.active { background:linear-gradient(135deg,var(--blue),var(--blue-mid)); color:white; }
         .lab-btn:hover { transform:translateY(-2px); box-shadow:0 2px 8px rgba(151,87,214,.2); }
 
         /* ── Leaderboard ── */
         .lb-row { display:flex; align-items:center; gap:12px; padding:10px 14px; border-radius:12px; margin-bottom:7px; border:1px solid #f0f0f0; transition:background .15s; }
-        .lb-row:hover { background:#f8f1fe; }
+        .lb-row:hover { background:#eff6ff; }
         .lb-rank { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:.88rem; flex-shrink:0; }
         .lb-rank.gold-rank   { background:linear-gradient(135deg,#f7c948,var(--ccs-gold)); color:#7a5c00; }
         .lb-rank.silver-rank { background:linear-gradient(135deg,#bdc3c7,#95a5a6); color:white; }
@@ -452,9 +468,9 @@ $error_msg    = $_GET['error'] ?? '';
         .lb-rank.normal-rank { background:#f0f0f0; color:#666; }
         .lb-name { font-weight:700; font-size:.85rem; color:#333; flex:1; }
         .lb-sub  { font-size:.72rem; color:#aaa; }
-        .lb-count { font-size:1.2rem; font-weight:800; color:var(--ccs-purple); }
-        .lb-bar-wrap { flex:1; height:6px; background:#ede8f6; border-radius:3px; overflow:hidden; }
-        .lb-bar { height:100%; border-radius:3px; background:linear-gradient(90deg,var(--ccs-purple),#b47ee8); }
+        .lb-count { font-size:1.2rem; font-weight:800; color:var(--blue-mid); }
+        .lb-bar-wrap { flex:1; height:6px; background:#eff6ff; border-radius:3px; overflow:hidden; }
+        .lb-bar { height:100%; border-radius:3px; background:linear-gradient(90deg,var(--blue-mid),var(--blue-dark)); }
 
         /* ── Reservation toggle banner ── */
         .res-status-banner { border-radius:12px; padding:11px 16px; font-weight:600; font-size:.85rem; display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
@@ -566,7 +582,7 @@ $error_msg    = $_GET['error'] ?? '';
     </div>
 </div>
 <script>
-new Chart(document.getElementById('purposeChart'),{type:'pie',data:{labels:<?=json_encode($lang_labels?:['No Data'])?>,datasets:[{data:<?=json_encode($lang_data?:[1])?>,backgroundColor:['#9757d6','#a1cbf7','#27ae60','#f39c12','#e74c3c','#3498db','#FFD700'],borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{family:'Poppins',size:11},boxWidth:14}}}}});
+new Chart(document.getElementById('purposeChart'),{type:'pie',data:{labels:<?=json_encode($lang_labels?:['No Data'])?>,datasets:[{data:<?=json_encode($lang_data?:[1])?>,backgroundColor:['#3B82F6','#DBEAFE','#27ae60','#f39c12','#e74c3c','#2563EB','#93C5FD'],borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{family:'Poppins',size:11},boxWidth:14}}}}});
 </script>
 
 <!-- ══════════════ STUDENTS TAB ══════════════ -->
@@ -929,8 +945,8 @@ $lb_lab_labels = []; $lb_lab_data = [];
 if ($lab_r) while ($r = $lab_r->fetch_assoc()) { $lb_lab_labels[] = 'Lab '.$r['lab']; $lb_lab_data[] = $r['cnt']; }
 ?>
 <script>
-new Chart(document.getElementById('lbLabChart'),{type:'bar',data:{labels:<?=json_encode($lb_lab_labels?:['No Data'])?>,datasets:[{label:'Sessions',data:<?=json_encode($lb_lab_data?:[0])?>,backgroundColor:'#9757d6',borderRadius:8}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}});
-new Chart(document.getElementById('lbPurposeChart'),{type:'doughnut',data:{labels:<?=json_encode($lang_labels?:['No Data'])?>,datasets:[{data:<?=json_encode($lang_data?:[1])?>,backgroundColor:['#9757d6','#a1cbf7','#27ae60','#f39c12','#e74c3c','#3498db','#FFD700'],borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{family:'Poppins',size:10},boxWidth:12}}}}});
+new Chart(document.getElementById('lbLabChart'),{type:'bar',data:{labels:<?=json_encode($lb_lab_labels?:['No Data'])?>,datasets:[{label:'Sessions',data:<?=json_encode($lb_lab_data?:[0])?>,backgroundColor:'#2563EB',borderRadius:8}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}});
+new Chart(document.getElementById('lbPurposeChart'),{type:'doughnut',data:{labels:<?=json_encode($lang_labels?:['No Data'])?>,datasets:[{data:<?=json_encode($lang_data?:[1])?>,backgroundColor:['#3B82F6','#DBEAFE','#27ae60','#f39c12','#e74c3c','#2563EB','#93C5FD'],borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{family:'Poppins',size:10},boxWidth:12}}}}});
 </script>
 
 <!-- ══════════════ LAB CONFIG TAB ══════════════ -->
@@ -1223,13 +1239,31 @@ $lab_labels = []; $lab_data = [];
 if ($lab_result) while ($row = $lab_result->fetch_assoc()) { $lab_labels[] = $row['lab']; $lab_data[] = $row['cnt']; }
 ?>
 <script>
-new Chart(document.getElementById('reportPurposeChart'),{type:'doughnut',data:{labels:<?=json_encode($lang_labels?:['No Data'])?>,datasets:[{data:<?=json_encode($lang_data?:[1])?>,backgroundColor:['#9757d6','#a1cbf7','#27ae60','#f39c12','#e74c3c','#3498db','#FFD700'],borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{family:'Poppins',size:11},boxWidth:14}}}}});
-new Chart(document.getElementById('reportLabChart'),{type:'bar',data:{labels:<?=json_encode($lab_labels?:['No Data'])?>,datasets:[{label:'Sessions',data:<?=json_encode($lab_data?:[0])?>,backgroundColor:'#9757d6',borderRadius:8}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}});
+new Chart(document.getElementById('reportPurposeChart'),{type:'doughnut',data:{labels:<?=json_encode($lang_labels?:['No Data'])?>,datasets:[{data:<?=json_encode($lang_data?:[1])?>,backgroundColor:['#3B82F6','#DBEAFE','#27ae60','#f39c12','#e74c3c','#2563EB','#93C5FD'],borderWidth:2,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{family:'Poppins',size:11},boxWidth:14}}}}});
+new Chart(document.getElementById('reportLabChart'),{type:'bar',data:{labels:<?=json_encode($lab_labels?:['No Data'])?>,datasets:[{label:'Sessions',data:<?=json_encode($lab_data?:[0])?>,backgroundColor:'#2563EB',borderRadius:8}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}});
 </script>
+
 
 <!-- ══════════════ SOFTWARE TAB ══════════════ -->
 <?php elseif ($active_tab === 'software'): ?>
+
+<?php
+// ── Handle Edit Software ──────────────────────────────────────────────
+if (isset($_POST['edit_software'])) {
+    $eid      = intval($_POST['edit_sw_id']);
+    $ename    = $conn->real_escape_string(trim($_POST['edit_sw_name']));
+    $ever     = $conn->real_escape_string(trim($_POST['edit_sw_version']));
+    $ecat     = $conn->real_escape_string(trim($_POST['edit_sw_category']));
+    $elab     = $conn->real_escape_string(trim($_POST['edit_sw_lab']));
+    $eavail   = isset($_POST['edit_sw_available']) ? 1 : 0;
+    $conn->query("UPDATE lab_software SET lab_name='$elab', software_name='$ename', version='$ever', category='$ecat', is_available=$eavail WHERE id=$eid");
+    echo "<script>window.location.href='?tab=software&edited=1';</script>";
+    exit;
+    }
+?>
+
 <div class="row g-4">
+    <!-- ── Add Software Form ── -->
     <div class="col-md-4">
         <div class="dash-card">
             <div class="card-header-purple"><span><i class="bi bi-plus-circle-fill me-2"></i>Add Software</span></div>
@@ -1253,40 +1287,151 @@ new Chart(document.getElementById('reportLabChart'),{type:'bar',data:{labels:<?=
             </div>
         </div>
     </div>
+
+    <!-- ── Software List Table ── -->
     <div class="col-md-8">
         <div class="dash-card h-100">
             <div class="card-header-purple"><span><i class="bi bi-app-indicator me-2"></i>Lab Software List</span></div>
             <div class="card-body p-3">
-                <table id="softwareTable" class="table table-bordered table-hover w-100">
-                    <thead><tr><th>Lab</th><th>Software</th><th>Version</th><th>Category</th><th>Status</th><th>Actions</th></tr></thead>
+
+                <?php if (isset($_GET['edited'])): ?>
+                    <div class="alert alert-success py-2 mb-3" style="font-size:.83rem;"><i class="bi bi-check-circle me-1"></i>Software updated successfully.</div>
+                <?php endif; ?>
+
+                <table id="softwareTable" class="table table-bordered table-hover w-100" style="font-size:.82rem;">
+                    <thead>
+                        <tr>
+                            <th>Lab</th>
+                            <th>Software</th>
+                            <th>Version</th>
+                            <th>Category</th>
+                            <th>Status</th>
+                            <th style="min-width:130px;">Actions</th>
+                        </tr>
+                    </thead>
                     <tbody>
                     <?php
                     $sw_all = $conn->query("SELECT * FROM lab_software ORDER BY lab_name, software_name");
-                    if ($sw_all && $sw_all->num_rows > 0): while ($sw = $sw_all->fetch_assoc()): ?>
-                        <tr>
+                    if ($sw_all && $sw_all->num_rows > 0):
+                        while ($sw = $sw_all->fetch_assoc()):
+                            $swid = $sw['id'];
+                    ?>
+                        <!-- ── View Row ── -->
+                        <tr id="row-view-<?=$swid?>">
                             <td>Lab <?=htmlspecialchars($sw['lab_name'])?></td>
                             <td><?=htmlspecialchars($sw['software_name'])?></td>
-                            <td><?=htmlspecialchars($sw['version']?:'—')?></td>
-                            <td><?=htmlspecialchars($sw['category']?:'—')?></td>
-                            <td><?=$sw['is_available']?'<span class="sw-badge-avail"><i class="bi bi-check-circle-fill me-1"></i>Available</span>':'<span class="sw-badge-no"><i class="bi bi-x-circle-fill me-1"></i>Not Available</span>'?></td>
+                            <td><?=htmlspecialchars($sw['version'] ?: '—')?></td>
+                            <td><?=htmlspecialchars($sw['category'] ?: '—')?></td>
                             <td>
+                                <?php if ($sw['is_available']): ?>
+                                    <span class="sw-badge-avail"><i class="bi bi-check-circle-fill me-1"></i>Available</span>
+                                <?php else: ?>
+                                    <span class="sw-badge-no"><i class="bi bi-x-circle-fill me-1"></i>Not Available</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <!-- Edit Button -->
+                                <button class="btn btn-sm btn-outline-primary" style="font-size:.7rem;padding:2px 8px;" onclick="toggleEdit(<?=$swid?>)">
+                                    <i class="bi bi-pencil-fill me-1"></i>Edit
+                                </button>
+                                <!-- Toggle Available -->
                                 <form method="POST" style="display:inline;">
-                                    <input type="hidden" name="sw_id" value="<?=$sw['id']?>">
-                                    <button name="toggle_software" class="btn btn-sm <?=$sw['is_available']?'btn-warning':'btn-success'?>" style="font-size:.7rem;padding:2px 8px;"><?=$sw['is_available']?'Disable':'Enable'?></button>
+                                    <input type="hidden" name="sw_id" value="<?=$swid?>">
+                                    <button name="toggle_software" class="btn btn-sm <?=$sw['is_available']?'btn-warning':'btn-success'?>" style="font-size:.7rem;padding:2px 8px;">
+                                        <?=$sw['is_available']?'Disable':'Enable'?>
+                                    </button>
                                 </form>
+                                <!-- Delete -->
                                 <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this software?')">
-                                    <input type="hidden" name="sw_id" value="<?=$sw['id']?>">
-                                    <button name="delete_software" class="btn btn-sm btn-danger" style="font-size:.7rem;padding:2px 8px;"><i class="bi bi-trash"></i></button>
+                                    <input type="hidden" name="sw_id" value="<?=$swid?>">
+                                    <button name="delete_software" class="btn btn-sm btn-danger" style="font-size:.7rem;padding:2px 8px;">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
                                 </form>
                             </td>
                         </tr>
-                    <?php endwhile; else: ?><tr><td colspan="6" class="text-center text-muted py-3"><i class="bi bi-inbox me-2"></i>No software added yet.</td></tr><?php endif; ?>
+
+                        <!-- ── Inline Edit Row (hidden by default) ── -->
+                        <tr id="row-edit-<?=$swid?>" style="display:none;background:#f8f5ff;">
+                            <td colspan="6">
+                                <form method="POST" class="d-flex flex-wrap gap-2 align-items-end p-1">
+                                    <input type="hidden" name="edit_sw_id" value="<?=$swid?>">
+
+                                    <!-- Lab -->
+                                    <div style="min-width:100px;">
+                                        <label style="font-size:.72rem;color:#777;display:block;">Lab</label>
+                                        <select name="edit_sw_lab" class="form-select form-select-sm">
+                                            <?php
+                                            $edit_labs = $conn->query("SELECT lab_name FROM lab_config ORDER BY lab_name");
+                                            while ($el = $edit_labs->fetch_assoc()):
+                                            ?>
+                                            <option value="<?=$el['lab_name']?>" <?=$el['lab_name']==$sw['lab_name']?'selected':''?>>
+                                                Lab <?=$el['lab_name']?>
+                                            </option>
+                                            <?php endwhile; ?>
+                                        </select>
+                                    </div>
+
+                                    <!-- Software Name -->
+                                    <div style="min-width:160px;">
+                                        <label style="font-size:.72rem;color:#777;display:block;">Software Name</label>
+                                        <input type="text" name="edit_sw_name" class="form-control form-control-sm"
+                                               value="<?=htmlspecialchars($sw['software_name'])?>" required>
+                                    </div>
+
+                                    <!-- Version -->
+                                    <div style="min-width:100px;">
+                                        <label style="font-size:.72rem;color:#777;display:block;">Version</label>
+                                        <input type="text" name="edit_sw_version" class="form-control form-control-sm"
+                                               value="<?=htmlspecialchars($sw['version'] ?? '')?>">
+                                    </div>
+
+                                    <!-- Category -->
+                                    <div style="min-width:120px;">
+                                        <label style="font-size:.72rem;color:#777;display:block;">Category</label>
+                                        <input type="text" name="edit_sw_category" class="form-control form-control-sm"
+                                               value="<?=htmlspecialchars($sw['category'] ?? '')?>">
+                                    </div>
+
+                                    <!-- Available checkbox -->
+                                    <div class="d-flex align-items-center gap-1" style="padding-bottom:4px;">
+                                        <input type="checkbox" name="edit_sw_available" id="edit_avail_<?=$swid?>"
+                                               class="form-check-input" <?=$sw['is_available']?'checked':''?>>
+                                        <label for="edit_avail_<?=$swid?>" style="font-size:.78rem;margin:0;">Available</label>
+                                    </div>
+
+                                    <!-- Save / Cancel -->
+                                    <div class="d-flex gap-1" style="padding-bottom:2px;">
+                                        <button type="submit" name="edit_software" class="btn btn-sm btn-purple" style="font-size:.7rem;padding:3px 12px;">
+                                            <i class="bi bi-check-lg me-1"></i>Save
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-secondary" style="font-size:.7rem;padding:3px 10px;" onclick="toggleEdit(<?=$swid?>)">
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </form>
+                            </td>
+                        </tr>
+
+                    <?php endwhile; else: ?>
+                        <tr><td colspan="6" class="text-center text-muted py-3"><i class="bi bi-inbox me-2"></i>No software added yet.</td></tr>
+                    <?php endif; ?>
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+function toggleEdit(id) {
+    const viewRow = document.getElementById('row-view-' + id);
+    const editRow = document.getElementById('row-edit-' + id);
+    const isEditing = editRow.style.display !== 'none';
+    editRow.style.display = isEditing ? 'none' : 'table-row';
+    viewRow.style.background = isEditing ? '' : '#ede8ff';
+}
+</script>
 
 <!-- ══════════════ FEEDBACK TAB ══════════════ -->
 <?php elseif ($active_tab === 'feedback'): ?>
@@ -1353,7 +1498,7 @@ new Chart(document.getElementById('reportLabChart'),{type:'bar',data:{labels:<?=
                     <td><?=$r['id']?></td>
                     <td><div style="font-weight:600;font-size:.82rem;"><?=htmlspecialchars($r['id_number'])?></div><div style="font-size:.72rem;color:#aaa;"><?=htmlspecialchars(trim($r['student_name'])?:'—')?></div></td>
                     <td><?=htmlspecialchars($r['purpose'])?></td><td><?=htmlspecialchars($r['lab'])?></td>
-                    <td><?=!empty($r['seat_number'])?'<strong style="color:var(--ccs-purple);">#'.$r['seat_number'].'</strong>':'—'?></td>
+                    <td><?=!empty($r['seat_number'])?'<strong style="color:var(--blue-mid);">#'.$r['seat_number'].'</strong>':'—'?></td>
                     <td style="font-size:.78rem;"><?=htmlspecialchars($r['preferred_time'])?></td>
                     <td><?=htmlspecialchars($r['reservation_date'])?></td>
                     <td>
@@ -1393,7 +1538,7 @@ let currentPCMap    = {};
 
 function confirmLogout(e) {
     e.preventDefault();
-    Swal.fire({ title:'Logging out?', text:'Are you sure?', icon:'warning', showCancelButton:true, confirmButtonText:'<i class="bi bi-box-arrow-right me-1"></i> Yes, Logout', cancelButtonText:'Cancel', confirmButtonColor:'#9757d6', cancelButtonColor:'#6c757d' })
+    Swal.fire({ title:'Logging out?', text:'Are you sure?', icon:'warning', showCancelButton:true, confirmButtonText:'<i class="bi bi-box-arrow-right me-1"></i> Yes, Logout', cancelButtonText:'Cancel', confirmButtonColor:'#3B82F6', cancelButtonColor:'#6c757d' })
     .then(r => { if (r.isConfirmed) Swal.fire({ title:'Logged out!', icon:'success', timer:1500, showConfirmButton:false }).then(() => { window.location.href='landingpage.php'; }); });
 }
 
@@ -1488,7 +1633,7 @@ function renderSitinPCGrid(totalPCs) {
         const selected = document.getElementById('selected_pc').value == i;
         if (currentPCFilter === 'available' && !isAvail) continue;
         const sc = isAvail ? 'available' : (status === 'maintenance' ? 'maintenance' : 'not_available');
-        html += `<div style="text-align:center;padding:6px 4px;border-radius:7px;cursor:${isAvail?'pointer':'not-allowed'};font-weight:700;font-size:.7rem;background:${isAvail?'linear-gradient(135deg,#d5f5e3,#a9dfbf)':(status==='maintenance'?'linear-gradient(135deg,#fdebd0,#f8c471)':'linear-gradient(135deg,#fadbd8,#f1948a)')};border:2px solid ${selected?'#9757d6':(isAvail?'#82c99a':(status==='maintenance'?'#f39c12':'#e57373'))};${selected?'box-shadow:0 0 0 3px rgba(151,87,214,.3);':''}" onclick="${isAvail?`selectSitinPC(${i})`:``}">
+        html += `<div style="text-align:center;padding:6px 4px;border-radius:7px;cursor:${isAvail?'pointer':'not-allowed'};font-weight:700;font-size:.7rem;background:${isAvail?'linear-gradient(135deg,#d5f5e3,#a9dfbf)':(status==='maintenance'?'linear-gradient(135deg,#fdebd0,#f8c471)':'linear-gradient(135deg,#fadbd8,#f1948a)')};border:2px solid ${selected?'#3B82F6':(isAvail?'#82c99a':(status==='maintenance'?'#f39c12':'#e57373'))};${selected?'box-shadow:0 0 0 3px rgba(37,99,235,.3);':''}" onclick="${isAvail?`selectSitinPC(${i})`:``}">
             <i class="bi bi-pc-display-horizontal d-block mb-1" style="font-size:.9rem;"></i>${i}</div>`;
     }
     grid.innerHTML = html;

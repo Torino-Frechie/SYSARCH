@@ -210,34 +210,61 @@ $time_slots = [
     <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
     <style>
         :root {
-            --uc-blue: #a1cbf7;
-            --ccs-purple: #9757d6;
-            --ccs-gold: #FFD700;
+            --blue:        #2564ebbb;
+            --blue-dark:   #1D4ED8;
+            --blue-deeper: #1E3A8A;
+            --blue-light:  #DBEAFE;
+            --blue-mid:    #3B82F6;
+            --white:       #FFFFFF;
+            --gray-50:     #F8FAFC;
+            --gray-100:    #F1F5F9;
+            --gray-200:    #E2E8F0;
+            --gray-400:    #94A3B8;
+            --gray-600:    #475569;
+            --gray-800:    #1E293B;
+            --blue-500:   var(--blue);
+            --blue-600:   var(--blue-dark);
+            --uc-blue:    var(--blue);
+            --ccs-purple: var(--blue-mid);
+            --ccs-gold:   var(--blue-mid);
         }
-        * { box-sizing: border-box; }
-        body { font-family: 'Poppins', sans-serif; background-color: #f4f7f6; margin: 0; overflow-x: hidden; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+       body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--gray-50);
+            color: var(--gray-800);
+            overflow-x: hidden;
+            animation: fadeIn .6s ease;
+        }
         .navbar {
-            background: linear-gradient(160deg, var(--ccs-purple) 0%, #6a3fa0 50%, #2e6da4 100%);
-            box-shadow: 0 4px 20px rgba(151,87,214,0.25);
+            background: var(--white);
+            box-shadow: 0 1px 12px rgba(57, 103, 255, 0.92);
             padding: 8px 20px;
+            height: 64px;
+            display: flex;
             position: sticky; top: 0; z-index: 100;
         }
-        .navbar-brand { font-weight: 700; color: white !important; font-size: 0.95rem; }
+        .navbar-brand { 
+            font-weight: 700; 
+            color: black !important; 
+            font-size: 0.95rem; 
+            display: flex;
+        }
         .nav-action-btn {
             display: flex; align-items: center; gap: 5px;
-            color: rgba(255,255,255,0.8) !important;
+            color: rgba(0, 0, 0, 0.8) !important;
             font-weight: 600; font-size: 0.78rem; border-radius: 8px;
             padding: 6px 10px !important; transition: all 0.2s; text-decoration: none;
         }
-        .nav-action-btn:hover { background: rgba(255,255,255,0.12); color: white !important; }
-        .nav-divider { width: 1px; height: 22px; background: rgba(255,255,255,0.25); margin: 0 2px; }
+        .nav-action-btn:hover { background: rgba(59, 79, 255, 0.66); color: white !important; }
+        .nav-divider { width: 1px; height: 22px; background: rgba(36, 121, 248, 0.53); margin: 0 2px; }
         .btn-logout-nav {
-            background: rgba(255,215,0,0.15); border: 1px solid rgba(255,215,0,0.35);
-            color: var(--ccs-gold) !important; padding: 6px 14px; border-radius: 8px;
+            background: #ffffffa3; border: 1px solid rgba(17, 92, 253, 0.7);
+            color: var(--uc-blue) !important; padding: 6px 14px; border-radius: 8px;
             font-size: 0.8rem; font-weight: 700; text-decoration: none; transition: all 0.2s;
         }
-        .btn-logout-nav:hover { background: var(--ccs-gold); color: #333 !important; }
-        .nav-welcome { color: rgba(255,255,255,0.75); font-size: 0.8rem; font-weight: 500; }
+        .btn-logout-nav:hover { background: var(--ccs-gold); color: #000000 !important; }
+        .nav-welcome { color: rgba(0, 0, 0, 0.75); font-size: 0.8rem; font-weight: 500; }
 
         .hero-section {
             background: linear-gradient(135deg, var(--ccs-purple) 0%, var(--uc-blue) 100%);
@@ -250,19 +277,19 @@ $time_slots = [
 
         .dash-card {
             background: white; border-radius: 18px;
-            box-shadow: 0 6px 24px rgba(151,87,214,0.08);
+            box-shadow: 0 6px 24px #c5c2f162;
             border: 1px solid rgba(0,0,0,0.04); overflow: hidden; margin-bottom: 20px;
         }
-        .card-header-purple { background: linear-gradient(135deg, var(--ccs-purple), #7c45b8); color: white; font-weight: 600; font-size: 0.88rem; padding: 11px 18px; }
-        .card-header-gold   { background: var(--ccs-gold); color: #4a3800; font-weight: 700; font-size: 0.88rem; padding: 11px 18px; }
-        .card-header-blue   { background: linear-gradient(135deg, #3a9bd5, #5ab4f0); color: white; font-weight: 600; font-size: 0.88rem; padding: 11px 18px; }
+        .card-header-purple { background: linear-gradient(135deg, var(--ccs-purple), rgba(21, 43, 241, 0.8)); color: black; font-weight: 600; font-size: 0.88rem; padding: 11px 18px; }
+        .card-header-gold   { background: var(--ccs-purple); color: #000000; font-weight: 700; font-size: 0.88rem; padding: 11px 18px; }
+        .card-header-blue   { background: linear-gradient(135deg, var(--ccs-purple), rgba(21, 43, 241, 0.8));  color: black; font-weight: 600; font-size: 0.88rem; padding: 11px 18px; }
 
         .avatar-wrap { position: relative; width: 90px; height: 90px; margin: 0 auto 10px; }
         .avatar-img  { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 4px solid white; box-shadow: 0 4px 14px rgba(151,87,214,0.25); }
 
         .info-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid #f5f5f5; font-size: 0.82rem; gap: 8px; }
         .info-row:last-child { border-bottom: none; }
-        .info-label { color: #aaa; white-space: nowrap; }
+        .info-label { color: #071ff5; white-space: nowrap; }
         .info-value { font-weight: 600; color: #333; text-align: right; word-break: break-word; }
 
         .credits-box { background: linear-gradient(135deg,#f8f1fe,#eef6ff); border-radius: 12px; padding: 12px 14px; margin: 12px 0; border: 1px solid rgba(151,87,214,0.1); }
@@ -276,12 +303,12 @@ $time_slots = [
         .summary-stat {
             background: linear-gradient(135deg,#f8f1fe,#eef6ff);
             border-radius: 12px; padding: 10px 12px; text-align: center;
-            border: 1px solid rgba(151,87,214,0.12);
+            border: 1px solid rgb(10, 64, 243);
         }
-        .summary-stat .s-num { font-size: 1.4rem; font-weight: 800; color: var(--ccs-purple); line-height: 1; }
-        .summary-stat .s-lbl { font-size: 0.67rem; color: #aaa; margin-top: 3px; }
+        .summary-stat .s-num { font-size: 1.4rem; font-weight: 800; color: var(--uc-blue); line-height: 1; }
+        .summary-stat .s-lbl { font-size: 0.67rem; color: #000000; margin-top: 3px; }
 
-        .table thead th { background: linear-gradient(135deg, var(--ccs-purple), #7c45b8); color: white; font-size: 0.78rem; font-weight: 600; border: none; padding: 9px 10px; }
+        .table thead th { background: linear-gradient(135deg, var(--ccs-purple), var(--blue-dark)); color: white; font-size: 0.78rem; font-weight: 600; border: none; padding: 9px 10px; }
         .table tbody td { font-size: 0.8rem; vertical-align: middle; padding: 7px 10px; }
         .table tbody tr:hover { background: #f8f1fe; }
         .table { margin-bottom: 0; }
@@ -292,12 +319,12 @@ $time_slots = [
         .badge-approved  { background:#27ae60; color:white; padding:2px 8px; border-radius:20px; font-size:0.7rem; font-weight:600; }
         .badge-cancelled { background:#95a5a6; color:white; padding:2px 8px; border-radius:20px; font-size:0.7rem; font-weight:600; }
 
-        .modal-header-purple { background: linear-gradient(135deg,var(--ccs-purple),#7c45b8); color:white; border-radius:16px 16px 0 0; padding:14px 20px; }
+        .modal-header-purple { background: linear-gradient(135deg, var(--blue-500), #1e40af); color:white; border-radius:16px 16px 0 0; padding:14px 20px; }
         .modal-header-purple .btn-close { filter: invert(1); }
-        .modal-content { border-radius: 16px; border: none; box-shadow: 0 20px 60px rgba(151,87,214,0.2); }
-        .form-control:focus, .form-select:focus { border-color: var(--ccs-purple); box-shadow: 0 0 0 3px rgba(151,87,214,0.12); }
-        .btn-purple { background: linear-gradient(135deg,var(--ccs-purple),#7c45b8); color:white; border:none; border-radius:8px; font-weight:600; font-size:0.85rem; transition:opacity .2s; }
-        .btn-purple:hover { opacity:.88; color:white; }
+        .modal-content { border-radius: 16px; border: none; box-shadow: 0 20px 60px rgba(37, 99, 235, 0.14); }
+        .form-control:focus, .form-select:focus { border-color: var(--blue-500); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15); }
+        .btn-purple { background: var(--blue-500); color:white; border:none; border-radius:8px; font-weight:600; font-size:0.85rem; transition:all .2s; }
+        .btn-purple:hover { background: var(--blue-600); color: #fff !important;  opacity:.94; }
         .field-label { font-size:.75rem; color:#888; font-weight:500; margin-bottom:3px; }
 
         .ann-item { padding: 11px 0; border-bottom: 1px solid #f0f0f0; }
@@ -309,12 +336,59 @@ $time_slots = [
         .rules-list li { padding: 5px 0; border-bottom: 1px solid #f5f5f5; font-size: 0.82rem; color: #444; }
         .rules-list li:last-child { border-bottom: none; }
 
-        .res-form-box { background: linear-gradient(135deg,#f8f1fe,#eef6ff); border-radius:12px; padding:1.1rem; margin-bottom:1.1rem; border:1px solid rgba(151,87,214,0.12); }
-        .res-form-box .res-title { font-size:.67rem; color:var(--ccs-purple); font-weight:700; text-transform:uppercase; letter-spacing:.08em; margin-bottom:10px; }
+        .res-form-box { background: linear-gradient(135deg,#f8faff,#f1f5ff); border-radius:12px; padding:1.1rem; margin-bottom:1.1rem; border:1px solid #dbeafe; }
+        .res-form-box .res-title { font-size:.67rem; color: var(--blue-500); font-weight:700; text-transform:uppercase; letter-spacing:.08em; margin-bottom:10px; }
+        #historyModal .table,
+        #reservationModal .table {
+            font-family: 'Poppins', sans-serif;
+            font-size: 0.9rem;
+            letter-spacing: 0.01em;
+            color: var(--gray-700);
+        }
+        #historyModal .table thead th,
+        #reservationModal .table thead th {
+            background: var(--blue-500);
+            color: #fff;
+            font-weight: 700;
+            border: none;
+            padding: 12px 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        #historyModal .table tbody td,
+        #reservationModal .table tbody td {
+            padding: 14px 16px;
+            border-top: 1px solid var(--gray-200);
+            color: var(--gray-700);
+        }
+        #historyModal .table tbody tr:nth-child(even),
+        #reservationModal .table tbody tr:nth-child(even) {
+            background: #f8fafc;
+        }
+        #historyModal .table tbody tr:hover,
+        #reservationModal .table tbody tr:hover {
+            background: #eef4ff;
+        }
+        #historyModal .table-responsive,
+        #reservationModal .table-responsive {
+            background: #ffffff;
+            border: 1px solid var(--gray-200);
+            border-radius: 16px;
+            padding: 10px;
+            box-shadow: 0 10px 30px rgba(37, 99, 235, 0.08);
+        }
+        .modal-content {
+            border-radius: 20px;
+            border: 1px solid var(--gray-200);
+            background: #ffffff;
+        }
+        .modal-body {
+            background: #fbfdff;
+        }
         .time-slot-option { flex:1; min-width:110px; }
         .time-slot-option input[type="radio"] { display:none; }
         .time-slot-option label { display:block; padding:8px 10px; background:#f8f9fa; border:2px solid #e0e0e0; border-radius:10px; text-align:center; cursor:pointer; transition:all .25s; font-size:0.78rem; font-weight:600; color:#666; }
-        .time-slot-option input[type="radio"]:checked + label { background:linear-gradient(135deg,var(--ccs-purple),#7c45b8); border-color:var(--ccs-gold); color:white; box-shadow:0 4px 12px rgba(151,87,214,0.3); }
+        .time-slot-option input[type="radio"]:checked + label { background:linear-gradient(135deg,var(--uc-blue),var(--blue-dark)); border-color:var(--uc-blue); color:white; box-shadow:0 4px 12px rgba(37,99,235,0.18); }
         .time-slot-option label:hover { border-color:var(--ccs-purple); background:#f3e9fd; }
 
         .pc-card-sel { aspect-ratio:1; border-radius:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:0.68rem; font-weight:700; cursor:pointer; border:2px solid transparent; transition:all .2s; }
@@ -323,12 +397,8 @@ $time_slots = [
         .pc-card-sel.available:hover { transform:scale(1.06); box-shadow:0 4px 12px rgba(39,174,96,.3); }
         .pc-card-sel.occupied     { background:linear-gradient(145deg,#fadbd8,#f1948a); color:#7b241c; border-color:#e57373; cursor:not-allowed; opacity:.7; }
         .pc-card-sel.maintenance  { background:linear-gradient(145deg,#fdebd0,#f8c471); color:#784212; border-color:#f39c12; cursor:not-allowed; }
-        .pc-card-sel.selected     { background:linear-gradient(145deg,var(--ccs-purple),#7c45b8); color:white; border-color:var(--ccs-gold); box-shadow:0 4px 14px rgba(151,87,214,.5); }
+        .pc-card-sel.selected     { background:linear-gradient(145deg,var(--uc-blue),var(--blue-dark)); color:white; border-color:var(--ccs-gold); box-shadow:0 4px 14px rgba(37,99,235,0.25); }
         .legend-dot { width:12px; height:12px; border-radius:3px; display:inline-block; margin-right:4px; vertical-align:middle; }
-
-        .software-badge { display:inline-block; padding:3px 10px; border-radius:20px; font-size:0.72rem; font-weight:700; }
-        .sw-available { background:#d5f5e3; color:#1a6835; }
-        .sw-unavailable { background:#fadbd8; color:#7b241c; }
 
         .res-disabled-banner { background:linear-gradient(135deg,#fadbd8,#f1948a); color:#7b241c; border-radius:12px; padding:12px 16px; font-weight:600; font-size:0.85rem; border:1px solid #e57373; }
 
@@ -341,7 +411,7 @@ $time_slots = [
             content: '';
             flex: 1;
             height: 2px;
-            background: linear-gradient(90deg, transparent, rgba(151,87,214,0.25), transparent);
+            background: linear-gradient(90deg, transparent, rgba(46, 77, 252, 0.51), transparent);
         }
         .sitin-summary-section .section-divider span {
             font-size: 0.75rem;
@@ -364,7 +434,120 @@ $time_slots = [
             50% { transform: translateY(6px); }
         }
 
+        /* Modal header gradient */
+        .modal-header-purple {
+            background: linear-gradient(135deg, #2395ff 0%, #1f40ffc9 100%);
+            padding: 16px 22px;
+            color: #fff;
+        }
+        .modal-header-purple h6 { font-size: 0.97rem; }
+        
+        /* Lab filter tab pills */
+        .sw-lab-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .sw-lab-tab {
+            padding: 5px 16px;
+            border-radius: 20px;
+            border: 1.5px solid #d5d8e8;
+            background: #fff;
+            color: #555;
+            font-size: 0.81rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-family: inherit;
+        }
+        .sw-lab-tab:hover { border-color: #3363ffcb; color: #0207ff; }
+        .sw-lab-tab.active { background: #3284ffe1; color: #fff; border-colorrgb(82, 70, 253)80; }
+        
+        /* Card grid */
+        .sw-card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+            gap: 14px;
+        }
+        
+        /* Individual card */
+        .sw-card-item {
+            border: 1.5px solid #e8eaf0;
+            border-radius: 12px;
+            padding: 14px 14px 12px;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transition: box-shadow 0.18s, border-color 0.18s;
+        }
+        .sw-card-item:hover {
+            box-shadow: 0 4px 18px rgba(80,40,140,0.09);
+            border-color: #c5b8e8;
+        }
+        
+        /* Card top row: name + badge */
+        .sw-card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 6px;
+        }
+        .sw-card-name {
+            font-size: 0.87rem;
+            font-weight: 700;
+            color: hsl(0, 0%, 0%);
+            line-height: 1.25;
+        }
+        
+        /* Availability badges */
+        .sw-badge-available {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            background: #e6f9ef;
+            color: #1a7a44;
+            border-radius: 6px;
+            padding: 2px 7px;
+            font-size: 0.70rem;
+            font-weight: 600;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .sw-badge-unavailable {
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            background: #fde8e8;
+            color: #b91c1c;
+            border-radius: 6px;
+            padding: 2px 7px;
+            font-size: 0.70rem;
+            font-weight: 600;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        
+        /* Version text */
+        .sw-card-version {
+            font-size: 0.78rem;
+            color: #888;
+        }
+        
+        /* Lab tag chip */
+        .sw-card-lab-tag {
+            display: inline-block;
+            background: #eef0fd;
+            color: #3363ffcb;
+            border-radius: 6px;
+            padding: 2px 10px;
+            font-size: 0.74rem;
+            font-weight: 600;
+            width: fit-content;
+        }
+
         footer { padding:24px 0; text-align:center; color:#bbb; font-size:0.78rem; }
+
     </style>
 </head>
 <body>
@@ -373,7 +556,7 @@ $time_slots = [
     <div class="container-fluid">
         <a class="navbar-brand" href="#"><i class="bi bi-pc-display-horizontal me-2"></i>CCS Sit-in Monitoring</a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMenu"
-            style="border:none;background:rgba(255,255,255,0.15);border-radius:8px;padding:4px 8px;">
+            style="border:none;background:rgba(0, 0, 0, 0.15);border-radius:8px;padding:4px 8px;">
             <span class="navbar-toggler-icon" style="background-image:url(&quot;data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='white' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e&quot;);"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarMenu">
@@ -527,105 +710,57 @@ $time_slots = [
                 </div>
             </div>
         </div>
-    </div>
-</div>
 
-<div class="sitin-summary-section" id="sitinSummary">
-    <div class="container-fluid px-0 px-md-2">
-        <div class="section-divider">
-            <span><i class="bi bi-bar-chart-line-fill me-2"></i>My Sit-in Summary &amp; Session History</span>
-        </div>
-
-        <div class="row g-3 mb-3">
-            <div class="col-6 col-md-3">
-                <div class="dash-card mb-0">
-                    <div class="card-body p-3">
-                        <div class="summary-stat">
-                            <div class="s-num"><?= $total_hours ?><small style="font-size:.75rem;">h</small></div>
-                            <div class="s-lbl"><i class="bi bi-clock me-1"></i>Total Sit-in Hours</div>
-                        </div>
+        <!-- ── Sit-in Summary ── -->
+        <div class="row g-3 mt-1">
+            <div class="col-12">
+                <div class="dash-card">
+                    <div class="card-header-purple">
+                        <i class="bi bi-bar-chart-fill me-2"></i>Sit-in Summary
                     </div>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="dash-card mb-0">
-                    <div class="card-body p-3">
-                        <div class="summary-stat">
-                            <div class="s-num"><?= $total_sessions ?></div>
-                            <div class="s-lbl"><i class="bi bi-layers me-1"></i>No. of Sessions</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="dash-card mb-0">
-                    <div class="card-body p-3">
-                        <div class="summary-stat">
-                            <div class="s-num"><?= $avg_duration ?><small style="font-size:.75rem;">m</small></div>
-                            <div class="s-lbl"><i class="bi bi-graph-up me-1"></i>Avg Session Duration</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="dash-card mb-0">
-                    <div class="card-body p-3">
-                        <div class="summary-stat">
-                            <div class="s-num"><?= $longest_session ?><small style="font-size:.75rem;">h</small></div>
-                            <div class="s-lbl"><i class="bi bi-trophy me-1"></i>Longest Session</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="dash-card">
-            <div class="card-header-blue">
-                <i class="bi bi-table me-2"></i>Sessions Table
-            </div>
-            <div class="card-body p-3">
-                <div class="table-responsive">
-                    <table id="sessionsSummaryTable" class="table table-bordered table-hover" style="font-size:0.78rem;">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Time In</th>
-                                <th>Time Out</th>
-                                <th>Duration</th>
-                                <th>PC No.</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        <?php
-                        if ($sessions && $sessions->num_rows > 0):
-                            while ($s = $sessions->fetch_assoc()):
-                                $is_active = empty($s['logout_time']);
-                                $login_dt  = new DateTime($s['login_time']);
-                                $logout_dt = $is_active ? new DateTime() : new DateTime($s['logout_time']);
-                                $diff      = $login_dt->diff($logout_dt);
-                                $duration  = $is_active
-                                    ? '<span style="color:#f39c12;font-weight:700;">Ongoing</span>'
-                                    : ($diff->h > 0 ? $diff->h.'h '.$diff->i.'m' : $diff->i.'m');
-                        ?>
-                            <tr>
-                                <td><?= date('M d, Y', strtotime($s['login_time'])) ?></td>
-                                <td><?= date('h:i A', strtotime($s['login_time'])) ?></td>
-                                <td><?= $is_active ? '<span class="text-muted">—</span>' : date('h:i A', strtotime($s['logout_time'])) ?></td>
-                                <td><?= $duration ?></td>
-                                <td><?= !empty($s['pc_number']) ? '#'.htmlspecialchars($s['pc_number']) : '—' ?></td>
-                                <td><?= $is_active ? '<span class="badge-active">Active</span>' : '<span class="badge-done">Done</span>' ?></td>
-                            </tr>
-                        <?php endwhile; else: ?>
-                            <tr><td colspan="6" class="text-center text-muted py-3"><i class="bi bi-inbox me-2"></i>No sessions yet.</td></tr>
+                    <div class="card-body p-4">
+                        <?php if ($total_sessions === 0): ?>
+                            <div style="text-align:center;padding:40px 20px;">
+                                <i class="bi bi-clipboard2" style="font-size:3rem;color:#ccc;display:block;margin-bottom:12px;"></i>
+                                <div style="font-weight:700;font-size:0.95rem;color:#444;">No sit-in data yet.</div>
+                                <div style="font-size:0.82rem;color:#aaa;margin-top:4px;">Your statistics will appear here after your first completed sit-in session.</div>
+                            </div>
+                        <?php else: ?>
+                            <div class="row g-3 text-center">
+                                <div class="col-6 col-md-3">
+                                    <div class="summary-stat">
+                                        <div class="s-num"><?= $total_sessions ?></div>
+                                        <div class="s-lbl"><i class="bi bi-person-check me-1"></i>Total Sessions</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <div class="summary-stat">
+                                        <div class="s-num"><?= $total_hours ?>h</div>
+                                        <div class="s-lbl"><i class="bi bi-clock me-1"></i>Total Hours</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <div class="summary-stat">
+                                        <div class="s-num"><?= $avg_duration ?>m</div>
+                                        <div class="s-lbl"><i class="bi bi-hourglass-split me-1"></i>Avg Duration</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <div class="summary-stat">
+                                        <div class="s-num"><?= $longest_session ?>h</div>
+                                        <div class="s-lbl"><i class="bi bi-trophy me-1"></i>Longest Session</div>
+                                    </div>
+                                </div>
+                            </div>
                         <?php endif; ?>
-                        </tbody>
-                    </table>
+                    </div>
                 </div>
             </div>
         </div>
+
     </div>
 </div>
+
 
 <footer>&copy; <?= date('Y') ?> University of Cebu &mdash; College of Computer Studies | CCS Sit-in Monitoring System</footer>
 
@@ -749,73 +884,230 @@ $time_slots = [
 <!-- History Modal -->
 <div class="modal fade" id="historyModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-xl">
-        <div class="modal-content">
-            <div class="modal-header-purple d-flex justify-content-between align-items-center">
-                <h6 class="mb-0 fw-bold"><i class="bi bi-clock-history me-2"></i>Sit-in History</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <div class="modal-content" style="border-radius:16px;overflow:hidden;border:none;">
+
+            <!-- Header -->
+            <div class="modal-header-purple d-flex justify-content-between align-items-start px-4 py-3">
+                <div>
+                    <h6 class="mb-0 fw-bold" style="font-size:1.1rem;"><i class="bi bi-clipboard2-data me-2"></i>History Information</h6>
+                    <small style="opacity:0.8;font-size:0.78rem;">Your previous sit-in sessions</small>
+                </div>
+                <button type="button" class="btn-close btn-close-white mt-1" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body p-0">
+
+            <div class="modal-body p-4">
+
                 <?php if (isset($feedback_success)): ?>
-                    <div class="alert alert-success py-2 px-3 m-3 mb-0" style="border-radius:8px;font-size:0.83rem;"><i class="bi bi-check-circle-fill me-2"></i><?= htmlspecialchars($feedback_success) ?></div>
+                    <div class="alert alert-success py-2 px-3 mb-3" style="border-radius:8px;font-size:0.83rem;"><i class="bi bi-check-circle-fill me-2"></i><?= htmlspecialchars($feedback_success) ?></div>
                 <?php endif; ?>
                 <?php if (isset($feedback_error)): ?>
-                    <div class="alert alert-warning py-2 px-3 m-3 mb-0" style="border-radius:8px;font-size:0.83rem;"><i class="bi bi-exclamation-triangle-fill me-2"></i><?= htmlspecialchars($feedback_error) ?></div>
+                    <div class="alert alert-warning py-2 px-3 mb-3" style="border-radius:8px;font-size:0.83rem;"><i class="bi bi-exclamation-triangle-fill me-2"></i><?= htmlspecialchars($feedback_error) ?></div>
                 <?php endif; ?>
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
+
+                <?php
+                // Build sessions array for JS-powered search/pagination
+                $history_rows = [];
+                if ($sessions) {
+                    $sessions->data_seek(0);
+                    $fb_map = [];
+                    $fb_res = $conn->query("SELECT sitin_id, message FROM feedback WHERE id_number = '$id_number'");
+                    if ($fb_res) while ($fb = $fb_res->fetch_assoc()) $fb_map[$fb['sitin_id']] = $fb['message'];
+
+                    while ($s = $sessions->fetch_assoc()) {
+                        $is_active  = empty($s['logout_time']);
+                        $login_dt   = new DateTime($s['login_time']);
+                        $logout_dt  = $is_active ? new DateTime() : new DateTime($s['logout_time']);
+                        $diff       = $login_dt->diff($logout_dt);
+                        $dur_str    = $is_active ? 'Ongoing' : ($diff->h > 0 ? $diff->h.'h '.$diff->i.'m' : $diff->i.'m');
+                        $has_fb     = isset($fb_map[$s['id']]);
+                        $history_rows[] = [
+                            'id'         => $s['id'],
+                            'date'       => date('M d, Y', strtotime($s['login_time'])),
+                            'login'      => date('h:i A', strtotime($s['login_time'])),
+                            'logout'     => $is_active ? '—' : date('h:i A', strtotime($s['logout_time'])),
+                            'duration'   => $dur_str,
+                            'purpose'    => htmlspecialchars($s['purpose']),
+                            'lab'        => htmlspecialchars($s['lab']),
+                            'pc'         => !empty($s['pc_number']) ? '#'.htmlspecialchars($s['pc_number']) : '—',
+                            'is_active'  => $is_active,
+                            'has_fb'     => $has_fb,
+                            'fb_msg'     => $has_fb ? htmlspecialchars($fb_map[$s['id']]) : '',
+                            'status'     => $is_active ? 'Active' : 'Done',
+                        ];
+                    }
+                }
+                ?>
+
+                <!-- Controls: Show entries + Search -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex align-items-center gap-2" style="font-size:0.85rem;color:#555;">
+                        Show
+                        <select id="histPageSize" class="form-select form-select-sm" style="width:70px;" onchange="histRender()">
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                        </select>
+                        entries per page
+                    </div>
+                    <div style="position:relative;">
+                        <i class="bi bi-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#aaa;font-size:0.8rem;"></i>
+                        <input type="text" id="histSearch" class="form-control form-control-sm" placeholder="Search..." style="padding-left:30px;width:200px;border-radius:20px;" oninput="histRender()">
+                    </div>
+                </div>
+
+                <!-- Table -->
+                <div class="table-responsive" style="border:1px solid #e8eaf0;border-radius:10px;overflow:hidden;">
+                    <table class="table mb-0" style="font-size:0.82rem;">
                         <thead>
-                            <tr>
-                                <th>Date</th><th>Time In</th><th>Time Out</th><th>Duration</th><th>Purpose</th><th>Lab</th><th>PC #</th><th>Status</th><th>Feedback</th>
+                            <tr style="background:linear-gradient(135deg,#3a2080,#7c4fc4);color:#fff;">
+                                <th style="padding:12px 14px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="histSort('date')">DATE <i class="bi bi-arrow-down-up ms-1" style="font-size:0.7rem;opacity:0.7;"></i></th>
+                                <th style="padding:12px 14px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="histSort('login')">LOGIN <i class="bi bi-arrow-down-up ms-1" style="font-size:0.7rem;opacity:0.7;"></i></th>
+                                <th style="padding:12px 14px;font-weight:600;white-space:nowrap;">LOGOUT</th>
+                                <th style="padding:12px 14px;font-weight:600;white-space:nowrap;">DURATION</th>
+                                <th style="padding:12px 14px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="histSort('purpose')">SIT PURPOSE <i class="bi bi-arrow-down-up ms-1" style="font-size:0.7rem;opacity:0.7;"></i></th>
+                                <th style="padding:12px 14px;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="histSort('lab')">LABORATORY <i class="bi bi-arrow-down-up ms-1" style="font-size:0.7rem;opacity:0.7;"></i></th>
+                                <th style="padding:12px 14px;font-weight:600;white-space:nowrap;">PC #</th>
+                                <th style="padding:12px 14px;font-weight:600;white-space:nowrap;">STATUS</th>
+                                <th style="padding:12px 14px;font-weight:600;white-space:nowrap;">ACTION</th>
                             </tr>
                         </thead>
-                        <tbody>
-                        <?php
-                        if ($sessions) $sessions->data_seek(0);
-                        $fb_map = [];
-                        $fb_res = $conn->query("SELECT sitin_id, message FROM feedback WHERE id_number = '$id_number'");
-                        if ($fb_res) while ($fb = $fb_res->fetch_assoc()) $fb_map[$fb['sitin_id']] = $fb['message'];
-
-                        if ($sessions && $sessions->num_rows > 0):
-                            while ($s = $sessions->fetch_assoc()):
-                                $is_active    = empty($s['logout_time']);
-                                $has_feedback = isset($fb_map[$s['id']]);
-                                $login_dt     = new DateTime($s['login_time']);
-                                $logout_dt    = $is_active ? new DateTime() : new DateTime($s['logout_time']);
-                                $diff         = $login_dt->diff($logout_dt);
-                                $dur_str      = $is_active ? '<em style="color:#f39c12;">Ongoing</em>' : ($diff->h > 0 ? $diff->h.'h '.$diff->i.'m' : $diff->i.'m');
-                        ?>
-                            <tr>
-                                <td><?= date('M d, Y', strtotime($s['login_time'])) ?></td>
-                                <td><?= date('h:i A', strtotime($s['login_time'])) ?></td>
-                                <td><?= $is_active ? '—' : date('h:i A', strtotime($s['logout_time'])) ?></td>
-                                <td><?= $dur_str ?></td>
-                                <td><?= htmlspecialchars($s['purpose']) ?></td>
-                                <td><?= htmlspecialchars($s['lab']) ?></td>
-                                <td><?= !empty($s['pc_number']) ? '#'.htmlspecialchars($s['pc_number']) : '—' ?></td>
-                                <td><?= $is_active ? '<span class="badge-active">Active</span>' : '<span class="badge-done">Done</span>' ?></td>
-                                <td>
-                                    <?php if ($is_active): ?>
-                                        <span class="text-muted" style="font-size:0.72rem;">Ongoing</span>
-                                    <?php elseif ($has_feedback): ?>
-                                        <span style="font-size:0.72rem;color:#27ae60;font-weight:600;"><i class="bi bi-check-circle-fill me-1"></i>Submitted</span>
-                                        <div style="font-size:0.7rem;color:#888;font-style:italic;max-width:140px;">"<?= htmlspecialchars($fb_map[$s['id']]) ?>"</div>
-                                    <?php else: ?>
-                                        <button class="btn btn-sm btn-purple" style="font-size:0.7rem;padding:2px 8px;border-radius:6px;" onclick="openFeedbackForm(<?= $s['id'] ?>)">
-                                            <i class="bi bi-chat-left-text me-1"></i>Feedback
-                                        </button>
-                                    <?php endif; ?>
-                                </td>
-                            </tr>
-                        <?php endwhile; else: ?>
-                            <tr><td colspan="9" class="text-center text-muted py-3"><i class="bi bi-inbox me-2"></i>No sit-in history found.</td></tr>
-                        <?php endif; ?>
+                        <tbody id="histTbody">
+                            <!-- Filled by JS -->
                         </tbody>
                     </table>
+                </div>
+
+                <!-- Empty State (shown by JS when no rows) -->
+                <div id="histEmptyState" style="display:none;text-align:center;padding:48px 20px;">
+                    <i class="bi bi-clipboard2 " style="font-size:3rem;color:#ccc;display:block;margin-bottom:12px;"></i>
+                    <div style="font-weight:700;font-size:0.95rem;color:#444;">No sit-in history yet.</div>
+                    <div style="font-size:0.82rem;color:#aaa;margin-top:4px;">Your completed sit-in sessions will appear here.</div>
+                </div>
+
+                <!-- Footer: entry count + pagination -->
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <div id="histEntryInfo" style="font-size:0.82rem;color:#777;"></div>
+                    <div id="histPagination" class="d-flex gap-1"></div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+                <script>
+                // ── History table data from PHP ──
+                var histData = <?= json_encode(array_values($history_rows)) ?>;
+                var histPage = 1;
+                var histSortKey = 'date';
+                var histSortAsc = false;
+                var histFiltered = [];
+
+                function histRender() {
+                    var search   = document.getElementById('histSearch').value.toLowerCase();
+                    var pageSize = parseInt(document.getElementById('histPageSize').value);
+
+                    // Filter
+                    histFiltered = histData.filter(function(r) {
+                        return (r.date + r.login + r.logout + r.purpose + r.lab + r.pc + r.status)
+                            .toLowerCase().indexOf(search) > -1;
+                    });
+
+                    // Sort
+                    histFiltered.sort(function(a, b) {
+                        var va = a[histSortKey] || '', vb = b[histSortKey] || '';
+                        return histSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+                    });
+
+                    // Paginate
+                    var total   = histFiltered.length;
+                    var pages   = Math.max(1, Math.ceil(total / pageSize));
+                    if (histPage > pages) histPage = 1;
+                    var start   = (histPage - 1) * pageSize;
+                    var pageRows = histFiltered.slice(start, start + pageSize);
+
+                    // Render rows
+                    var tbody = document.getElementById('histTbody');
+                    var empty = document.getElementById('histEmptyState');
+
+                    if (pageRows.length === 0) {
+                        tbody.innerHTML = '';
+                        empty.style.display = '';
+                    } else {
+                        empty.style.display = 'none';
+                        tbody.innerHTML = pageRows.map(function(r, i) {
+                            var rowBg = i % 2 === 0 ? '#fff' : '#fafafa';
+                            var statusBadge = r.is_active
+                                ? '<span style="background:#d4efdf;color:#1e8449;border-radius:6px;padding:2px 8px;font-size:0.72rem;font-weight:600;">Active</span>'
+                                : '<span style="background:#eaecf0;color:#555;border-radius:6px;padding:2px 8px;font-size:0.72rem;font-weight:600;">Done</span>';
+
+                            var actionCell;
+                            if (r.is_active) {
+                                actionCell = '<span style="font-size:0.72rem;color:#aaa;">Ongoing</span>';
+                            } else if (r.has_fb) {
+                                actionCell = '<span style="font-size:0.72rem;color:#27ae60;font-weight:600;"><i class="bi bi-check-circle-fill me-1"></i>Submitted</span>'
+                                        + (r.fb_msg ? '<div style="font-size:0.7rem;color:#888;font-style:italic;max-width:140px;">"' + r.fb_msg + '"</div>' : '');
+                            } else {
+                                actionCell = '<button class="btn btn-sm btn-purple" style="font-size:0.7rem;padding:2px 10px;border-radius:6px;" onclick="openFeedbackForm(' + r.id + ')">'
+                                        + '<i class="bi bi-chat-left-text me-1"></i>Feedback</button>';
+                            }
+
+                            return '<tr style="background:' + rowBg + ';border-bottom:1px solid #f0f0f0;">'
+                                + '<td style="padding:10px 14px;">' + r.date + '</td>'
+                                + '<td style="padding:10px 14px;">' + r.login + '</td>'
+                                + '<td style="padding:10px 14px;">' + r.logout + '</td>'
+                                + '<td style="padding:10px 14px;">' + r.duration + '</td>'
+                                + '<td style="padding:10px 14px;">' + r.purpose + '</td>'
+                                + '<td style="padding:10px 14px;">' + r.lab + '</td>'
+                                + '<td style="padding:10px 14px;">' + r.pc + '</td>'
+                                + '<td style="padding:10px 14px;">' + statusBadge + '</td>'
+                                + '<td style="padding:10px 14px;">' + actionCell + '</td>'
+                                + '</tr>';
+                        }).join('');
+                    }
+
+                    // Entry info
+                    var info = document.getElementById('histEntryInfo');
+                    if (total === 0) {
+                        info.textContent = 'No entries';
+                    } else {
+                        info.textContent = 'Showing ' + (start + 1) + ' to ' + Math.min(start + pageSize, total) + ' of ' + total + ' entries';
+                    }
+
+                    // Pagination buttons
+                    var pag = document.getElementById('histPagination');
+                    var btnStyle = 'border:1px solid #ddd;background:#fff;border-radius:6px;padding:3px 9px;font-size:0.78rem;cursor:pointer;color:#555;';
+                    var activeBtnStyle = 'border:1px solid #3a2080;background:#3a2080;border-radius:6px;padding:3px 9px;font-size:0.78rem;cursor:pointer;color:#fff;font-weight:600;';
+                    var html = '';
+                    html += '<button style="' + btnStyle + '" onclick="histGoPage(1)" ' + (histPage===1?'disabled':'') + '>«</button>';
+                    html += '<button style="' + btnStyle + '" onclick="histGoPage(' + (histPage-1) + ')" ' + (histPage===1?'disabled':'') + '>‹</button>';
+                    for (var p = 1; p <= pages; p++) {
+                        html += '<button style="' + (p===histPage ? activeBtnStyle : btnStyle) + '" onclick="histGoPage(' + p + ')">' + p + '</button>';
+                    }
+                    html += '<button style="' + btnStyle + '" onclick="histGoPage(' + (histPage+1) + ')" ' + (histPage===pages?'disabled':'') + '>›</button>';
+                    html += '<button style="' + btnStyle + '" onclick="histGoPage(' + pages + ')" ' + (histPage===pages?'disabled':'') + '>»</button>';
+                    pag.innerHTML = html;
+                }
+
+                function histGoPage(p) {
+                    var pageSize = parseInt(document.getElementById('histPageSize').value);
+                    var pages = Math.max(1, Math.ceil(histFiltered.length / pageSize));
+                    histPage = Math.min(Math.max(1, p), pages);
+                    histRender();
+                }
+
+                function histSort(key) {
+                    if (histSortKey === key) { histSortAsc = !histSortAsc; }
+                    else { histSortKey = key; histSortAsc = true; }
+                    histRender();
+                }
+
+                // Init on modal open
+                document.getElementById('historyModal').addEventListener('show.bs.modal', function() {
+                    histPage = 1;
+                    document.getElementById('histSearch').value = '';
+                    histRender();
+                });
+                </script>
 
 <!-- Feedback Modal -->
 <div class="modal fade" id="feedbackModal" tabindex="-1" aria-hidden="true" style="z-index:1070;">
@@ -846,65 +1138,70 @@ $time_slots = [
 
 <!-- Software Availability Modal -->
 <div class="modal fade" id="softwareModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content" style="border-radius:16px;overflow:hidden;border:none;">
             <div class="modal-header-purple d-flex justify-content-between align-items-center">
-                <h6 class="mb-0 fw-bold"><i class="bi bi-app-indicator me-2"></i>Lab Software Availability</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <h6 class="mb-0 fw-bold"><i class="bi bi-display me-2"></i>Lab Software Availability</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body p-3">
+            <div class="modal-body p-4">
                 <?php if ($software_table_exists): ?>
                     <?php
-                    $labs_sw = $conn->query("SELECT DISTINCT lab_name FROM lab_software ORDER BY lab_name");
+                    $labs_sw = $conn->query("SELECT lab_name FROM lab_config ORDER BY lab_name");
                     if ($labs_sw && $labs_sw->num_rows > 0):
+                        $all_sw = $conn->query("SELECT * FROM lab_software ORDER BY lab_name, software_name");
+                        $sw_rows = [];
+                        while ($row = $all_sw->fetch_assoc()) {
+                            $sw_rows[] = $row;
+                        }
+                        $lab_names = [];
+                        $labs_sw->data_seek(0);
+                        while ($lsw = $labs_sw->fetch_assoc()) {
+                            $lab_names[] = $lsw['lab_name'];
+                        }
                     ?>
-                        <ul class="nav nav-tabs mb-3" id="swLabTabs">
-                            <?php $labs_sw->data_seek(0); $first = true; while ($lsw = $labs_sw->fetch_assoc()): ?>
-                                <li class="nav-item">
-                                    <button class="nav-link <?= $first ? 'active' : '' ?>" data-bs-toggle="tab" data-bs-target="#swLab<?= preg_replace('/\W/','',$lsw['lab_name']) ?>">
-                                        Lab <?= htmlspecialchars($lsw['lab_name']) ?>
-                                    </button>
-                                </li>
-                            <?php $first = false; endwhile; ?>
-                        </ul>
-                        <div class="tab-content">
-                            <?php $labs_sw->data_seek(0); $first = true; while ($lsw = $labs_sw->fetch_assoc()):
-                                $lid = preg_replace('/\W/','',$lsw['lab_name']);
-                                $sw_list = $conn->query("SELECT * FROM lab_software WHERE lab_name='{$lsw['lab_name']}' ORDER BY software_name");
-                            ?>
-                                <div class="tab-pane fade <?= $first ? 'show active' : '' ?>" id="swLab<?= $lid ?>">
-                                    <?php if ($sw_list && $sw_list->num_rows > 0): ?>
-                                        <div class="table-responsive">
-                                            <table class="table table-bordered table-hover" style="font-size:0.82rem;">
-                                                <thead><tr><th>Software</th><th>Version</th><th>Category</th><th>Status</th></tr></thead>
-                                                <tbody>
-                                                <?php while ($sw = $sw_list->fetch_assoc()): ?>
-                                                    <tr>
-                                                        <td><i class="bi bi-app me-1" style="color:var(--ccs-purple);"></i><?= htmlspecialchars($sw['software_name']) ?></td>
-                                                        <td><?= htmlspecialchars($sw['version'] ?? '—') ?></td>
-                                                        <td><?= htmlspecialchars($sw['category'] ?? '—') ?></td>
-                                                        <td>
-                                                            <?php if ($sw['is_available']): ?>
-                                                                <span class="software-badge sw-available"><i class="bi bi-check-circle-fill me-1"></i>Available</span>
-                                                            <?php else: ?>
-                                                                <span class="software-badge sw-unavailable"><i class="bi bi-x-circle-fill me-1"></i>Not Available</span>
-                                                            <?php endif; ?>
-                                                        </td>
-                                                    </tr>
-                                                <?php endwhile; ?>
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    <?php else: ?>
-                                        <p class="text-muted text-center py-3"><i class="bi bi-inbox me-2"></i>No software listed for this lab.</p>
-                                    <?php endif; ?>
+
+                    <!-- Lab Filter Tabs -->
+                    <div class="sw-lab-filters mb-3">
+                        <button class="sw-lab-tab active" onclick="filterSwLab('all', this)">All Labs</button>
+                        <?php foreach ($lab_names as $ln): ?>
+                            <button class="sw-lab-tab" data-labval="<?= htmlspecialchars($ln) ?>" onclick="filterSwLab('<?= htmlspecialchars($ln) ?>', this)">
+                                Lab <?= htmlspecialchars($ln) ?>
+                            </button>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <!-- Software Card Grid -->
+                    <div class="sw-card-grid" id="swCardGrid">
+                        <?php if (!empty($sw_rows)): ?>
+                            <?php foreach ($sw_rows as $sw): ?>
+                                <div class="sw-card-item" data-lab="<?= htmlspecialchars($sw['lab_name']) ?>">
+                                    <div class="sw-card-top">
+                                        <div class="sw-card-name"><?= htmlspecialchars($sw['software_name']) ?></div>
+                                        <?php if ($sw['is_available']): ?>
+                                            <span class="sw-badge-available"><i class="bi bi-check-square-fill me-1"></i>Available</span>
+                                        <?php else: ?>
+                                            <span class="sw-badge-unavailable"><i class="bi bi-x-square-fill me-1"></i>Not Available</span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="sw-card-version"><?= htmlspecialchars($sw['version'] ?? '—') ?></div>
+                                    <span class="sw-card-lab-tag">Lab <?= htmlspecialchars($sw['lab_name']) ?></span>
                                 </div>
-                            <?php $first = false; endwhile; ?>
-                        </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Empty state message -->
+                    <p id="swEmptyMsg" style="display:none;" class="text-muted text-center py-4">
+                        <i class="bi bi-inbox me-2"></i>No software added for this lab yet.
+                    </p>
+
                     <?php else: ?>
-                        <p class="text-muted text-center py-3"><i class="bi bi-inbox me-2"></i>No software information available yet.</p>
+                        <p class="text-muted text-center py-4"><i class="bi bi-inbox me-2"></i>No labs configured yet.</p>
                     <?php endif; ?>
+
                 <?php else: ?>
+                    <!-- Fallback: show PC availability per lab as cards -->
                     <p class="text-muted mb-3" style="font-size:0.83rem;"><i class="bi bi-info-circle me-1"></i>Software list not yet configured. Showing current PC availability per lab.</p>
                     <?php
                     $labs_avail = $conn->query("
@@ -918,30 +1215,53 @@ $time_slots = [
                         GROUP BY lc.lab_name
                         ORDER BY lc.lab_name
                     ");
-                    if ($labs_avail && $labs_avail->num_rows > 0):
-                    ?>
-                        <div class="table-responsive">
-                            <table class="table table-bordered">
-                                <thead><tr><th>Lab</th><th>Available PCs</th><th>In Use</th><th>Maintenance</th><th>Total</th></tr></thead>
-                                <tbody>
-                                <?php while ($la = $labs_avail->fetch_assoc()): ?>
-                                    <tr>
-                                        <td><strong>Lab <?= htmlspecialchars($la['lab_name']) ?></strong></td>
-                                        <td><span class="software-badge sw-available"><?= intval($la['available_count']) ?> PCs</span></td>
-                                        <td><span class="software-badge" style="background:#d4e6f1;color:#1a5276;"><?= intval($la['in_use_count']) ?></span></td>
-                                        <td><span class="software-badge" style="background:#fdebd0;color:#784212;"><?= intval($la['maintenance_count']) ?></span></td>
-                                        <td><?= intval($la['total_pcs']) ?></td>
-                                    </tr>
-                                <?php endwhile; ?>
-                                </tbody>
-                            </table>
-                        </div>
+                    if ($labs_avail && $labs_avail->num_rows > 0): ?>
+                    <div class="sw-card-grid">
+                        <?php while ($la = $labs_avail->fetch_assoc()): ?>
+                            <div class="sw-card-item" data-lab="<?= htmlspecialchars($la['lab_name']) ?>">
+                                <div class="sw-card-top">
+                                    <div class="sw-card-name">Lab <?= htmlspecialchars($la['lab_name']) ?></div>
+                                    <span class="sw-badge-available"><?= intval($la['available_count']) ?> PCs</span>
+                                </div>
+                                <div class="sw-card-version">In Use: <?= intval($la['in_use_count']) ?> &nbsp;|&nbsp; Maintenance: <?= intval($la['maintenance_count']) ?></div>
+                                <span class="sw-card-lab-tag">Total: <?= intval($la['total_pcs']) ?> PCs</span>
+                            </div>
+                        <?php endwhile; ?>
+                    </div>
                     <?php endif; ?>
                 <?php endif; ?>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+function filterSwLab(lab, btn) {
+    // Update active tab
+    document.querySelectorAll('.sw-lab-tab').forEach(function(t) {
+        t.classList.remove('active');
+    });
+    btn.classList.add('active');
+
+    // Show/hide cards
+    var cards = document.querySelectorAll('#swCardGrid .sw-card-item');
+    var visibleCount = 0;
+
+    cards.forEach(function(card) {
+        var cardLab = card.getAttribute('data-lab').trim();
+        var labStr  = String(lab).trim();
+        var show    = (labStr === 'all' || cardLab === labStr);
+        card.style.display = show ? '' : 'none';
+        if (show) visibleCount++;
+    });
+
+    // Show/hide empty message
+    var emptyMsg = document.getElementById('swEmptyMsg');
+    if (emptyMsg) {
+        emptyMsg.style.display = (visibleCount === 0) ? '' : 'none';
+    }
+}
+</script>
 
 <!-- Reservation Modal -->
 <div class="modal fade" id="reservationModal" tabindex="-1" aria-hidden="true">
@@ -1078,10 +1398,10 @@ $time_slots = [
 <div class="modal fade" id="pcSelectionModal" tabindex="-1" aria-hidden="true" style="z-index:1065;">
     <div class="modal-dialog modal-dialog-centered" style="max-width:820px;">
         <div class="modal-content" style="border-radius:20px;overflow:hidden;">
-            <div style="background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);color:white;padding:16px 22px;display:flex;justify-content:space-between;align-items:center;">
+            <div class="modal-header-purple d-flex justify-content-between align-items-center">
                 <div>
-                    <div style="font-weight:800;font-size:1rem;"><i class="bi bi-pc-display me-2" style="color:#a1cbf7;"></i>Select Your PC — Lab <span id="pcModalLabLabel">—</span></div>
-                    <div style="font-size:0.72rem;opacity:.6;margin-top:2px;">Click on any available (green) PC</div>
+                    <div style="font-weight:800;font-size:1rem;"><i class="bi bi-pc-display me-2" style="color:var(--blue-light);"></i>Select Your PC — Lab <span id="pcModalLabLabel">—</span></div>
+                    <div style="font-size:0.72rem;opacity:.85;margin-top:2px;">Click on any available (green) PC</div>
                 </div>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
@@ -1089,11 +1409,11 @@ $time_slots = [
                 <div><span class="legend-dot" style="background:#27ae60;"></span>Available</div>
                 <div><span class="legend-dot" style="background:#e74c3c;"></span>Booked/In Use</div>
                 <div><span class="legend-dot" style="background:#f39c12;"></span>Maintenance</div>
-                <div><span class="legend-dot" style="background:#9757d6;"></span>Your Selection</div>
+                <div><span class="legend-dot" style="background:var(--blue-mid);"></span>Your Selection</div>
                 <div class="ms-auto">Available: <strong id="availablePcCount">—</strong></div>
             </div>
             <div style="padding:16px 18px 10px;background:#fff;">
-                <div style="background:linear-gradient(90deg,#1a1a2e,#2c3e6b);color:#a1cbf7;text-align:center;padding:7px 18px;border-radius:8px;font-size:0.68rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;margin-bottom:14px;"><i class="bi bi-easel me-2"></i>FRONT — COMPUTER LAB</div>
+                <div style="background:linear-gradient(90deg,var(--blue-deeper),var(--blue-dark));color:var(--blue-light);text-align:center;padding:7px 18px;border-radius:8px;font-size:0.68rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;margin-bottom:14px;"><i class="bi bi-easel me-2"></i>FRONT — COMPUTER LAB</div>
                 <div id="pcSelectionGrid" style="display:grid;grid-template-columns:repeat(10,1fr);gap:7px;"></div>
             </div>
             <div style="padding:11px 18px 14px;background:#fafafa;border-top:1px solid #f0f0f0;display:flex;justify-content:flex-end;gap:10px;">
@@ -1150,9 +1470,9 @@ function openPCSelectionModal() {
     const date     = document.getElementById('res_date').value;
     const slotEl   = document.querySelector('input[name="res_time_slot"]:checked');
 
-    if (!lab)    { Swal.fire({ icon:'warning', title:'Select Lab First', confirmButtonColor:'#9757d6' }); return; }
-    if (!date)   { Swal.fire({ icon:'warning', title:'Select Date First', confirmButtonColor:'#9757d6' }); return; }
-    if (!slotEl) { Swal.fire({ icon:'warning', title:'Select Time Slot First', confirmButtonColor:'#9757d6' }); return; }
+    if (!lab)    { Swal.fire({ icon:'warning', title:'Select Lab First', confirmButtonColor:'#3B82F6' }); return; }
+    if (!date)   { Swal.fire({ icon:'warning', title:'Select Date First', confirmButtonColor:'#3B82F6' }); return; }
+    if (!slotEl) { Swal.fire({ icon:'warning', title:'Select Time Slot First', confirmButtonColor:'#3B82F6' }); return; }
 
     document.getElementById('pcModalLabLabel').textContent = lab;
     buildPCGrid(lab, date, slotEl.value);
@@ -1205,7 +1525,7 @@ function confirmPCSelection() {
     document.getElementById('selectedPcDisplay').style.borderColor = '#27ae60';
     document.getElementById('pcRequiredNote').style.display = 'none';
     pcSelectionModal.hide();
-    Swal.fire({ title:'PC Selected!', text:`PC #${currentSelectedPC} confirmed.`, icon:'success', confirmButtonColor:'#9757d6' });
+    Swal.fire({ title:'PC Selected!', text:`PC #${currentSelectedPC} confirmed.`, icon:'success', confirmButtonColor:'#3B82F6' });
 }
 
 function resetPCSelection() {
@@ -1228,7 +1548,7 @@ if (resForm) resForm.addEventListener('submit', function(e) {
     if (!pc) {
         e.preventDefault();
         document.getElementById('pcRequiredNote').style.display = 'block';
-        Swal.fire({ icon:'warning', title:'PC Not Selected', text:'Please select a PC for your reservation.', confirmButtonColor:'#9757d6' });
+        Swal.fire({ icon:'warning', title:'PC Not Selected', text:'Please select a PC for your reservation.', confirmButtonColor:'#3B82F6' });
     }
 });
 
@@ -1255,7 +1575,7 @@ function confirmLogout(e) {
         title:'Logging out?', text:'Are you sure?', icon:'warning',
         showCancelButton:true,
         confirmButtonText:'<i class="bi bi-box-arrow-right me-1"></i> Yes, Logout',
-        cancelButtonText:'Cancel', confirmButtonColor:'#9757d6', cancelButtonColor:'#6c757d'
+        cancelButtonText:'Cancel', confirmButtonColor:'#3B82F6', cancelButtonColor:'#6c757d'
     }).then(r => {
         if (r.isConfirmed) {
             Swal.fire({ title:'Logged out!', icon:'success', timer:1500, showConfirmButton:false })
